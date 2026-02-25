@@ -1,0 +1,7 @@
+node_modules/
+.pnpm-store/
+.vite/
+dist/
+*.log
+.DS_Store
+pnpm-lock.yaml

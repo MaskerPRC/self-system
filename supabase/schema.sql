@@ -23,6 +23,7 @@ CREATE TABLE interactive_pages (
   description TEXT,
   route_path TEXT NOT NULL UNIQUE,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'building')),
+  is_featured BOOLEAN NOT NULL DEFAULT false,
   last_heartbeat TIMESTAMPTZ DEFAULT now(),
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()

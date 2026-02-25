@@ -1,43 +1,98 @@
 <template>
-  <main class="panel">
-    <div v-if="!conversationId" class="empty-state">
-      <p>选择或创建一个对话</p>
-      <p class="hint font-mono">描述需求，AI 会在应用项目中创建交互页面</p>
+  <section class="flex-1 flex flex-col h-full relative bg-paper shadow-[-10px_0_30px_rgba(0,0,0,0.02)] sm:rounded-tl-[2.5rem] overflow-hidden border-l border-stone-100">
+    <!-- Header -->
+    <header class="h-16 flex items-center px-6 justify-between shrink-0 bg-paper/90 backdrop-blur-sm z-10">
+      <div class="flex items-center gap-3">
+        <button @click="$emit('toggle-sidebar')" class="sm:hidden p-2 -ml-2 text-ink-500 hover:bg-stone-100 rounded-full transition-colors">
+          <i class="ph ph-list text-xl"></i>
+        </button>
+        <h3 class="font-serif font-medium text-ink-900 text-lg">{{ chatTitle }}</h3>
+      </div>
+    </header>
+
+    <!-- Messages -->
+    <div ref="msgsRef" class="flex-1 overflow-y-auto px-4 sm:px-10 py-6 space-y-8 pb-40">
+      <!-- Empty: no conversation selected -->
+      <div v-if="!conversationId" class="h-full flex flex-col items-center justify-center text-ink-500">
+        <div class="w-12 h-12 mb-4 text-brand-500 opacity-80">
+          <i class="ph-duotone ph-sparkle text-5xl"></i>
+        </div>
+        <p class="font-serif text-lg text-ink-800">开始与 Claude Code 协作</p>
+        <p class="text-sm mt-2 text-ink-400">描述你想构建的界面或功能</p>
+      </div>
+
+      <!-- Empty: conversation selected but no messages -->
+      <div v-else-if="!messages.length" class="h-full flex flex-col items-center justify-center text-ink-500">
+        <div class="w-12 h-12 mb-4 text-brand-500 opacity-80">
+          <i class="ph-duotone ph-sparkle text-5xl"></i>
+        </div>
+        <p class="font-serif text-lg text-ink-800">描述你想创建的交互页面</p>
+        <p class="text-sm mt-2 text-ink-400">例如：创建一个待办事项管理页面</p>
+      </div>
+
+      <!-- Messages list -->
+      <template v-for="m in messages" :key="m.id">
+        <!-- System message -->
+        <div v-if="m.role === 'system'" class="flex justify-center my-6 animate-fade-in-up">
+          <div class="bg-surface border border-stone-200 text-ink-500 text-xs px-4 py-2 rounded-full flex items-center gap-2 shadow-sm font-mono">
+            <i class="ph-duotone ph-file-code"></i>
+            {{ m.content }}
+          </div>
+        </div>
+
+        <!-- User message -->
+        <div v-else-if="m.role === 'user'" class="flex justify-end animate-fade-in-up">
+          <div class="max-w-[85%] sm:max-w-[70%] bg-surface border border-stone-200 text-ink-900 px-6 py-4 rounded-3xl rounded-tr-md shadow-sm text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+            {{ m.content }}
+          </div>
+        </div>
+
+        <!-- Assistant message -->
+        <div v-else class="flex gap-4 animate-fade-in-up max-w-[90%] sm:max-w-[80%]">
+          <div class="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 shrink-0 border border-brand-100 mt-1">
+            <i class="ph-fill ph-sparkle"></i>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-sm font-serif font-semibold text-ink-900 mb-1">Claude</span>
+            <div class="text-ink-800 text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+              {{ m.content }}
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
 
-    <template v-else>
-      <div class="msgs" ref="msgsRef">
-        <div v-if="!messages.length" class="no-msg font-mono">
-          <p>描述你想创建的交互页面</p>
-          <p class="hint">例如：创建一个待办事项管理页面</p>
-        </div>
-        <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
-          <div class="msg-head">
-            <span class="role">{{ roleMap[m.role] || m.role }}</span>
-            <span class="time font-mono">{{ fmtTime(m.created_at) }}</span>
-          </div>
-          <div class="msg-body">{{ m.content }}</div>
-        </div>
-        <div v-if="isProcessing" class="processing font-mono">
-          <span class="dots"><i/><i/><i/></span> AI 处理中...
-        </div>
-      </div>
-
-      <div class="input-bar">
+    <!-- Floating Input Area -->
+    <div class="absolute bottom-24 left-0 right-0 px-4 sm:px-10 flex justify-center pointer-events-none">
+      <div v-if="conversationId" class="w-full max-w-3xl relative bg-paper rounded-3xl border border-stone-200 shadow-float focus-within:border-stone-300 focus-within:shadow-xl transition-all duration-300 pointer-events-auto">
         <textarea
-          v-model="text" ref="inputRef"
+          ref="inputRef"
+          v-model="text"
           @keydown.enter.exact.prevent="send"
           :disabled="isProcessing"
-          placeholder="描述你想创建的交互页面..."
-          class="font-mono"
           rows="1"
-        />
-        <button @click="send" :disabled="!text.trim() || isProcessing">
-          {{ isProcessing ? '...' : '发送' }}
+          class="w-full bg-transparent border-0 outline-none resize-none py-4 pl-6 pr-14 text-ink-900 placeholder-ink-400 max-h-[160px] disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
+          placeholder="输入需求..."
+        ></textarea>
+
+        <button @click="send" :disabled="!text.trim() || isProcessing"
+          class="absolute right-2 bottom-2 w-10 h-10 flex items-center justify-center bg-brand-500 text-white rounded-full hover:bg-brand-600 disabled:bg-stone-100 disabled:text-stone-400 transition-colors">
+          <i class="ph-bold ph-arrow-up text-lg"></i>
         </button>
+
+        <!-- Processing Indicator -->
+        <div v-if="isProcessing" class="absolute -top-12 left-1/2 transform -translate-x-1/2 flex items-center gap-2 px-4 py-2 bg-paper border border-stone-200 shadow-subtle rounded-full text-xs text-ink-600 font-medium">
+          <i class="ph-duotone ph-circle-notch animate-spin text-brand-500"></i>
+          <span class="font-serif italic">Claude 正在思考</span>
+          <div class="flex gap-1 ml-1">
+            <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
+            <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
+            <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
+          </div>
+        </div>
       </div>
-    </template>
-  </main>
+    </div>
+  </section>
 </template>
 
 <script setup>
@@ -46,25 +101,20 @@ import { ref, watch, nextTick } from 'vue'
 const props = defineProps({
   conversationId: String,
   messages: Array,
-  isProcessing: Boolean
+  isProcessing: Boolean,
+  chatTitle: { type: String, default: '选择一个对话' }
 })
-const emit = defineEmits(['send'])
+const emit = defineEmits(['send', 'toggle-sidebar'])
 
 const text = ref('')
 const msgsRef = ref(null)
 const inputRef = ref(null)
-const roleMap = { user: '你', assistant: 'AI', system: '系统' }
 
 function send() {
   if (!text.value.trim() || props.isProcessing) return
   emit('send', text.value)
   text.value = ''
   if (inputRef.value) inputRef.value.style.height = 'auto'
-}
-
-function fmtTime(s) {
-  if (!s) return ''
-  return new Date(s).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 watch(() => props.messages?.length, () => {
@@ -75,52 +125,8 @@ watch(text, () => {
   nextTick(() => {
     if (inputRef.value) {
       inputRef.value.style.height = 'auto'
-      inputRef.value.style.height = Math.min(inputRef.value.scrollHeight, 120) + 'px'
+      inputRef.value.style.height = Math.min(inputRef.value.scrollHeight, 160) + 'px'
     }
   })
 })
 </script>
-
-<style scoped>
-.panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fafafa; }
-.empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #aaa; font-size: 15px; }
-.hint { font-size: 12px; color: #ccc; margin-top: 6px; }
-.msgs { flex: 1; overflow-y: auto; padding: 18px 20px; }
-.no-msg { text-align: center; padding: 50px 20px; color: #aaa; font-size: 13px; }
-.no-msg .hint { margin-top: 6px; font-size: 11px; color: #ccc; }
-.msg { margin-bottom: 14px; max-width: 80%; }
-.msg.user { margin-left: auto; }
-.msg.assistant { margin-right: auto; }
-.msg.system { margin: 6px auto; max-width: 90%; }
-.msg-head { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
-.msg.user .msg-head { justify-content: flex-end; }
-.role { font-size: 10px; font-weight: 700; color: #888; }
-.time { font-size: 9px; color: #ccc; }
-.msg-body {
-  padding: 9px 13px; font-size: 13px; line-height: 1.5;
-  word-break: break-word; white-space: pre-wrap; border: 2px solid #000;
-}
-.msg.user .msg-body { background: #e0e7ff; }
-.msg.assistant .msg-body { background: white; }
-.msg.system .msg-body { background: #fef3c7; border-color: #d97706; border-width: 1px; font-size: 11px; text-align: center; color: #92400e; }
-.processing { display: flex; align-items: center; gap: 6px; color: #aaa; font-size: 12px; padding: 4px 0; }
-.dots { display: flex; gap: 3px; }
-.dots i { width: 5px; height: 5px; background: #aaa; border-radius: 50%; display: block; animation: blink 1.2s infinite; }
-.dots i:nth-child(2) { animation-delay: .2s; }
-.dots i:nth-child(3) { animation-delay: .4s; }
-@keyframes blink { 0%,80%,100%{opacity:.3} 40%{opacity:1} }
-.input-bar { padding: 14px 20px; border-top: 2px solid #000; background: white; display: flex; gap: 8px; align-items: flex-end; }
-.input-bar textarea {
-  flex: 1; padding: 9px 12px; border: 2px solid #000; font-size: 13px; line-height: 1.4;
-  resize: none; outline: none; min-height: 38px; max-height: 120px;
-}
-.input-bar textarea:focus { background: #fffbeb; }
-.input-bar textarea:disabled { opacity: .5; }
-.input-bar button {
-  background: #000; color: white; border: 2px solid #000; padding: 9px 18px;
-  font-size: 12px; font-weight: 700; cursor: pointer;
-  box-shadow: 2px 2px 0 #666; transition: all .1s; white-space: nowrap;
-}
-.input-bar button:hover:not(:disabled) { transform: translate(1px,1px); box-shadow: 1px 1px 0 #666; }
-.input-bar button:disabled { opacity: .4; cursor: not-allowed; }
-</style>

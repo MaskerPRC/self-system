@@ -1,59 +1,236 @@
 <template>
-  <div class="app-container">
-    <router-view />
-    <nav class="bottom-bar">
-      <router-link to="/" class="tab" :class="{ active: $route.name === 'collection' }">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-        </svg>
-        <span>交互集合</span>
+  <div class="bg-surface text-ink-900 overflow-hidden flex flex-col font-sans antialiased selection:bg-brand-100 selection:text-brand-600 view-container">
+    <!-- Main area: flex row for content + log panel -->
+    <div class="flex-1 flex min-h-0">
+      <!-- Page content -->
+      <main class="flex-1 min-w-0 relative overflow-hidden">
+        <router-view />
+      </main>
+
+      <!-- Resizable divider (desktop only) -->
+      <div
+        v-if="showLogs"
+        class="hidden sm:flex w-1.5 cursor-col-resize items-center justify-center bg-stone-200/60 hover:bg-brand-300/60 active:bg-brand-400/60 transition-colors shrink-0"
+        @mousedown="startResize"
+        @touchstart.prevent="startResizeTouch"
+      >
+        <div class="w-0.5 h-8 bg-stone-400/40 rounded-full"></div>
+      </div>
+
+      <!-- Log panel: desktop = side panel, mobile = full-screen overlay -->
+      <div
+        v-if="showLogs"
+        class="fixed inset-0 z-[90] sm:static sm:z-auto shrink-0"
+        :style="panelStyle"
+      >
+        <LogPanel
+          :appLines="appLogLines"
+          :controlLines="controlLogLines"
+          :activeTab="activeLogTab"
+          @update:activeTab="activeLogTab = $event"
+          @close="showLogs = false"
+          @clear="clearCurrentLogs"
+        />
+      </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-paper/80 backdrop-blur-xl border-t border-stone-200 p-1.5 flex gap-1 z-50 sm:bottom-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:border sm:border-t-stone-200 sm:shadow-pill sm:rounded-full">
+      <router-link
+        to="/"
+        class="relative flex-1 sm:flex-initial px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"
+        :class="$route.name === 'collection' ? 'text-brand-700 bg-brand-50' : 'text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50'"
+      >
+        <i class="text-lg" :class="$route.name === 'collection' ? 'ph-fill ph-cards' : 'ph ph-cards'"></i>
+        <span>页面集合</span>
       </router-link>
-      <router-link to="/chat" class="tab" :class="{ active: $route.name === 'chat' }">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-        <span>对话</span>
+
+      <router-link
+        to="/featured"
+        class="relative flex-1 sm:flex-initial px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"
+        :class="$route.name === 'featured' ? 'text-amber-700 bg-amber-50' : 'text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50'"
+      >
+        <i class="text-lg" :class="$route.name === 'featured' ? 'ph-fill ph-star' : 'ph ph-star'"></i>
+        <span>精选</span>
       </router-link>
+
+      <router-link
+        to="/chat"
+        class="relative flex-1 sm:flex-initial px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"
+        :class="$route.name === 'chat' ? 'text-brand-700 bg-brand-50' : 'text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50'"
+      >
+        <i class="text-lg" :class="$route.name === 'chat' ? 'ph-fill ph-chat-teardrop' : 'ph ph-chat-teardrop'"></i>
+        <span>AI 对话</span>
+      </router-link>
+
+      <button
+        @click="toggleLogs"
+        class="relative px-3 sm:px-4 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center no-underline whitespace-nowrap"
+        :class="showLogs ? 'text-brand-700 bg-brand-50' : 'text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50'"
+      >
+        <i class="ph ph-terminal-window text-lg"></i>
+        <span v-if="hasNewLogs" class="absolute top-2 right-2 sm:top-2.5 sm:right-3 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+      </button>
+
+      <button
+        @click="showSettings = true"
+        class="relative px-3 sm:px-4 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center no-underline whitespace-nowrap text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50"
+      >
+        <i class="ph ph-gear-six text-lg"></i>
+      </button>
     </nav>
+
+    <!-- Settings Modal -->
+    <SettingsModal :visible="showSettings" @close="showSettings = false" />
   </div>
 </template>
 
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'Inter', sans-serif;
-  background: #f5f5f5;
-  color: #1a1a1a;
-  overflow: hidden;
+<script setup>
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import SettingsModal from './components/SettingsModal.vue'
+import LogPanel from './components/LogPanel.vue'
+
+const API = ''
+const MAX_LOG_LINES = 500
+
+const showSettings = ref(false)
+const showLogs = ref(false)
+const activeLogTab = ref('app')
+const appLogLines = ref([])
+const controlLogLines = ref([])
+const hasNewLogs = ref(false)
+const logPanelWidth = ref(420)
+let ws = null
+
+// ---- Resize ----
+
+const panelStyle = computed(() => {
+  // Mobile: full screen (handled by fixed inset-0)
+  // Desktop: fixed width via inline style
+  return {
+    width: logPanelWidth.value + 'px'
+  }
+})
+
+let resizing = false
+let startX = 0
+let startW = 0
+
+function startResize(e) {
+  resizing = true
+  startX = e.clientX
+  startW = logPanelWidth.value
+  document.addEventListener('mousemove', onResize)
+  document.addEventListener('mouseup', stopResize)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
 }
-.font-mono { font-family: 'JetBrains Mono', monospace; }
-.app-container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
+
+function startResizeTouch(e) {
+  resizing = true
+  startX = e.touches[0].clientX
+  startW = logPanelWidth.value
+  document.addEventListener('touchmove', onResizeTouch)
+  document.addEventListener('touchend', stopResize)
 }
-.bottom-bar {
-  height: 56px;
-  background: white;
-  border-top: 2px solid #000;
-  display: flex;
-  flex-shrink: 0;
+
+function onResize(e) {
+  if (!resizing) return
+  const delta = startX - e.clientX
+  const maxW = window.innerWidth * 0.6
+  logPanelWidth.value = Math.max(280, Math.min(maxW, startW + delta))
 }
-.tab {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  text-decoration: none;
-  color: #aaa;
-  font-size: 11px;
-  font-weight: 700;
-  transition: all 0.15s;
+
+function onResizeTouch(e) {
+  if (!resizing) return
+  const delta = startX - e.touches[0].clientX
+  const maxW = window.innerWidth * 0.6
+  logPanelWidth.value = Math.max(280, Math.min(maxW, startW + delta))
 }
-.tab:hover { color: #666; background: #fafafa; }
-.tab.active { color: #000; background: #f0f0f0; }
-</style>
+
+function stopResize() {
+  resizing = false
+  document.removeEventListener('mousemove', onResize)
+  document.removeEventListener('mouseup', stopResize)
+  document.removeEventListener('touchmove', onResizeTouch)
+  document.removeEventListener('touchend', stopResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
+// ---- Log Management ----
+
+// Strip ANSI escape codes from log text
+const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07/g
+function stripAnsi(str) {
+  return str.replace(ANSI_RE, '')
+}
+
+function appendLogText(text, target) {
+  if (!text) return
+  const newLines = stripAnsi(text).split('\n').filter(l => l.trim())
+  if (!newLines.length) return
+  target.value = [...target.value, ...newLines].slice(-MAX_LOG_LINES)
+  if (!showLogs.value) hasNewLogs.value = true
+}
+
+async function fetchInitialLogs() {
+  try {
+    const [appRes, ctrlRes] = await Promise.all([
+      fetch(`${API}/api/app/logs?tail=200`),
+      fetch(`${API}/api/control/logs?tail=200`)
+    ])
+    const [appData, ctrlData] = await Promise.all([appRes.json(), ctrlRes.json()])
+    if (appData.success && appData.data) {
+      appLogLines.value = stripAnsi(appData.data).split('\n').filter(l => l.trim()).slice(-MAX_LOG_LINES)
+    }
+    if (ctrlData.success && ctrlData.data) {
+      controlLogLines.value = stripAnsi(ctrlData.data).split('\n').filter(l => l.trim()).slice(-MAX_LOG_LINES)
+    }
+  } catch {}
+}
+
+function toggleLogs() {
+  showLogs.value = !showLogs.value
+  if (showLogs.value) {
+    hasNewLogs.value = false
+    fetchInitialLogs()
+  }
+}
+
+function clearCurrentLogs() {
+  if (activeLogTab.value === 'app') {
+    appLogLines.value = []
+  } else {
+    controlLogLines.value = []
+  }
+}
+
+// ---- WebSocket ----
+
+function connectWs() {
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const url = import.meta.env.DEV ? 'ws://localhost:3000' : `${protocol}//${location.host}`
+  ws = new WebSocket(url)
+  ws.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data)
+      if (data.type === 'app_logs' && data.logs) {
+        appendLogText(data.logs, appLogLines)
+      } else if (data.type === 'control_logs' && data.logs) {
+        appendLogText(data.logs, controlLogLines)
+      }
+    } catch {}
+  }
+  ws.onclose = () => { setTimeout(connectWs, 5000) }
+}
+
+onMounted(() => {
+  connectWs()
+})
+
+onUnmounted(() => {
+  if (ws) ws.close()
+  stopResize()
+})
+</script>

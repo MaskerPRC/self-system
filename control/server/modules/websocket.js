@@ -3,6 +3,9 @@ import { WebSocketServer } from 'ws';
 let wss = null;
 const clients = new Set();
 
+// 当前正在处理的会话集合
+const processingConversations = new Set();
+
 /**
  * 设置 WebSocket 服务
  */
@@ -13,7 +16,12 @@ export function setupWebSocket(server) {
     console.log('[WebSocket] 新客户端连接');
     clients.add(ws);
 
-    ws.send(JSON.stringify({ type: 'connected', message: '已连接到控制平台' }));
+    // 发送当前处理状态给新连接的客户端
+    ws.send(JSON.stringify({
+      type: 'connected',
+      message: '已连接到控制平台',
+      processing: [...processingConversations]
+    }));
 
     ws.on('close', () => {
       console.log('[WebSocket] 客户端断开');
@@ -39,6 +47,24 @@ export function broadcast(message) {
       client.send(data);
     }
   });
+}
+
+/**
+ * 标记会话开始处理
+ */
+export function markProcessing(conversationId) {
+  processingConversations.add(conversationId);
+}
+
+/**
+ * 标记会话处理完成
+ */
+export function clearProcessing(conversationId) {
+  processingConversations.delete(conversationId);
+}
+
+export function getProcessingList() {
+  return [...processingConversations];
 }
 
 export function getClientCount() {

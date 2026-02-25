@@ -21,8 +21,8 @@ const pages = ref([])
 
 onMounted(async () => {
   try {
-    // 从控制后端获取活跃页面列表
-    const base = import.meta.env.DEV ? 'http://localhost:3000' : `http://${location.hostname}:3000`
+    // 从控制后端获取活跃页面列表（DEV模式走 vite proxy）
+    const base = import.meta.env.DEV ? '' : `http://${location.hostname}:3000`
     const r = await fetch(`${base}/api/pages/active`)
     const d = await r.json()
     if (d.success) pages.value = d.data

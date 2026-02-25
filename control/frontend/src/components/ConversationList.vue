@@ -1,29 +1,75 @@
 <template>
-  <aside class="sidebar">
-    <div class="sidebar-top">
-      <span class="title">对话</span>
-      <button class="add-btn" @click="$emit('create')">+</button>
+  <aside class="absolute sm:relative z-50 w-72 h-full bg-surface sm:bg-transparent border-r border-stone-200 flex flex-col transition-transform duration-300 ease-out"
+    :class="open ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'">
+    <div class="p-6 pb-2 flex items-center justify-between">
+      <h2 class="font-serif font-semibold text-lg text-ink-900">对话</h2>
+      <button @click="$emit('create')" class="w-8 h-8 flex items-center justify-center bg-paper border border-stone-200 text-ink-800 hover:border-brand-500 hover:text-brand-600 rounded-full shadow-subtle transition-all">
+        <i class="ph-bold ph-plus"></i>
+      </button>
     </div>
-    <div class="list">
-      <div v-if="!conversations.length" class="empty font-mono">暂无对话</div>
+
+    <div class="flex-1 overflow-y-auto p-4 pt-2 space-y-1">
+      <div v-if="!conversations.length" class="flex flex-col items-center justify-center py-12 text-ink-400">
+        <p class="text-sm">暂无对话</p>
+      </div>
       <div
         v-for="c in conversations" :key="c.id"
-        class="item" :class="{ active: c.id === activeId }"
         @click="$emit('select', c.id)"
+        class="group flex items-center justify-between px-4 py-3 rounded-2xl cursor-pointer transition-all duration-200"
+        :class="c.id === activeId ? 'bg-paper shadow-subtle border border-stone-100' : 'hover:bg-stone-100 border border-transparent'"
       >
-        <div class="info">
-          <p class="name">{{ c.title }}</p>
-          <p class="time font-mono">{{ fmt(c.updated_at) }}</p>
+        <div class="overflow-hidden flex-1">
+          <input v-if="editingId === c.id" ref="editInput"
+            v-model="editingTitle"
+            @keydown.enter="confirmEdit(c.id)"
+            @keydown.escape="cancelEdit"
+            @blur="confirmEdit(c.id)"
+            @click.stop
+            class="w-full text-[15px] font-medium bg-white border border-brand-400 rounded-lg px-2 py-0.5 outline-none text-ink-800"
+          />
+          <div v-else @dblclick.stop="startEdit(c)" class="text-[15px] font-medium truncate" :class="c.id === activeId ? 'text-brand-700' : 'text-ink-700 group-hover:text-ink-900'">{{ c.title }}</div>
+          <div class="text-xs mt-1 text-ink-400">{{ fmt(c.updated_at) }}</div>
         </div>
-        <button class="rm" @click.stop="$emit('delete', c.id)">&times;</button>
+        <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button @click.stop="startEdit(c)" class="w-6 h-6 flex items-center justify-center text-ink-300 hover:text-brand-500 rounded-full">
+            <i class="ph ph-pencil-simple text-sm"></i>
+          </button>
+          <button @click.stop="$emit('delete', c.id)" class="w-6 h-6 flex items-center justify-center text-ink-300 hover:text-red-500 rounded-full">
+            <i class="ph ph-x text-sm"></i>
+          </button>
+        </div>
       </div>
     </div>
   </aside>
 </template>
 
 <script setup>
-defineProps({ conversations: Array, activeId: String })
-defineEmits(['select', 'create', 'delete'])
+import { ref, nextTick } from 'vue'
+
+defineProps({ conversations: Array, activeId: String, open: Boolean })
+const emit = defineEmits(['select', 'create', 'delete', 'rename'])
+
+const editingId = ref(null)
+const editingTitle = ref('')
+const editInput = ref(null)
+
+function startEdit(c) {
+  editingId.value = c.id
+  editingTitle.value = c.title
+  nextTick(() => { editInput.value?.[0]?.focus?.() || editInput.value?.focus?.() })
+}
+
+function confirmEdit(id) {
+  const title = editingTitle.value.trim()
+  if (title && editingId.value === id) {
+    emit('rename', id, title)
+  }
+  editingId.value = null
+}
+
+function cancelEdit() {
+  editingId.value = null
+}
 
 function fmt(s) {
   if (!s) return ''
@@ -33,37 +79,3 @@ function fmt(s) {
     : d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
 }
 </script>
-
-<style scoped>
-.sidebar {
-  width: 240px; border-right: 2px solid #000; background: white;
-  display: flex; flex-direction: column; flex-shrink: 0;
-}
-.sidebar-top {
-  height: 52px; display: flex; align-items: center; justify-content: space-between;
-  padding: 0 14px; border-bottom: 2px solid #000; background: #f8f8f8;
-}
-.title { font-size: 13px; font-weight: 900; }
-.add-btn {
-  width: 28px; height: 28px; background: #000; color: white; border: none;
-  font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-}
-.add-btn:hover { background: #333; }
-.list { flex: 1; overflow-y: auto; }
-.empty { padding: 24px; text-align: center; font-size: 11px; color: #bbb; }
-.item {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 14px; border-bottom: 1px solid #f0f0f0; cursor: pointer;
-}
-.item:hover { background: #fafafa; }
-.item.active { background: #f0f0f0; border-left: 3px solid #000; padding-left: 11px; }
-.info { flex: 1; min-width: 0; }
-.name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.time { font-size: 10px; color: #aaa; margin-top: 2px; }
-.rm {
-  background: none; border: none; color: #ddd; font-size: 16px; cursor: pointer;
-  opacity: 0; transition: .15s;
-}
-.item:hover .rm { opacity: 1; }
-.rm:hover { color: #dc2626; }
-</style>

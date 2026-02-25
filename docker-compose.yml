@@ -1,0 +1,69 @@
+services:
+  # ==================== 控制容器 ====================
+  # 控制前端 + 控制后端 + Claude Code + Docker CLI
+  control:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: digital-avatar-control
+    ports:
+      - "42617:3000"   # 控制后端 (API + WebSocket + 静态前端)
+    volumes:
+      # 共享应用代码 volume（Claude Code 在此修改文件）
+      - app-data:/app/app
+      # Claude 配置持久化（Skills 等）
+      - claude-data:/app/.claude
+      # Docker socket 挂载（用于管理应用容器）
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - NODE_ENV=production
+      # Claude Code 配置
+      - CLAUDE_CODE_URL=${CLAUDE_CODE_URL}
+      - CLAUDE_CODE_KEY=${CLAUDE_CODE_KEY}
+      # Supabase 配置
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      # 应用容器名称（供 process.js 使用）
+      - APP_CONTAINER_NAME=digital-avatar-app
+      # 应用前端外部访问地址（供控制面板 iframe/链接使用）
+      - APP_EXTERNAL_URL=${APP_EXTERNAL_URL:-http://localhost:53781}
+      # Git 自动提交配置
+      - GIT_USER_NAME=${GIT_USER_NAME:-Digital Avatar Bot}
+      - GIT_USER_EMAIL=${GIT_USER_EMAIL:-bot@digital-avatar.local}
+      - GIT_REMOTE_URL=${GIT_REMOTE_URL}
+      - GIT_AUTO_PUSH=${GIT_AUTO_PUSH:-true}
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    networks:
+      - app-network
+
+  # ==================== 应用容器 ====================
+  # 应用前端 + 应用后端（由控制容器通过 Docker CLI 管理）
+  app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: digital-avatar-app
+    ports:
+      - "53783:3001"   # 应用后端
+      - "53781:5174"   # 应用前端
+    volumes:
+      # 共享应用代码 volume（运行代码来自此处）
+      - app-data:/app
+    environment:
+      # Vite proxy 通过 Docker 网络访问控制后端
+      - CONTROL_BACKEND_URL=http://control:3000
+    restart: unless-stopped
+    networks:
+      - app-network
+
+volumes:
+  app-data:
+    driver: local
+  claude-data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

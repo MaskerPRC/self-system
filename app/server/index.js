@@ -13,11 +13,12 @@ app.get('/api/app/health', (req, res) => {
 });
 
 // ==================== 应用路由 ====================
-// Claude Code 会在下方添加新的 API 路由
+// 每个功能模块放在 routes/ 目录下的独立文件中
+// Claude Code 在下方通过 import + app.use() 引入路由文件
 // --- APP ROUTES START ---
 
 // --- APP ROUTES END ---
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`[App Server] http://localhost:${PORT}`);
 });
