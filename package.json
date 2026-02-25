@@ -1,0 +1,15 @@
+{
+  "name": "digital-avatar",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "chcp 65001 && concurrently -n ctrl:server,ctrl:web,app:server,app:web -c blue,green,yellow,magenta \"npm run dev:control-server\" \"npm run dev:control-frontend\" \"npm run dev:app-server\" \"npm run dev:app-frontend\"",
+    "dev:control-server": "cd control/server && node --watch index.js",
+    "dev:control-frontend": "cd control/frontend && npx vite",
+    "dev:app-server": "cd app/server && node --watch index.js",
+    "dev:app-frontend": "cd app/frontend && npx vite"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
