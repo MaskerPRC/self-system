@@ -5,14 +5,22 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "cap:sync": "npx cap sync",
+    "cap:open:ios": "npx cap open ios",
+    "cap:open:android": "npx cap open android",
+    "cap:build": "vite build && npx cap sync"
   },
   "dependencies": {
+    "@capacitor/core": "^6.0.0",
     "strip-ansi": "^7.2.0",
     "vue": "^3.4.0",
     "vue-router": "^4.2.5"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
     "@tailwindcss/postcss": "^4.2.1",
     "@vitejs/plugin-vue": "^5.0.0",
     "autoprefixer": "^10.4.24",

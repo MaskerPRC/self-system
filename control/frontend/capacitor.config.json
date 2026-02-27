@@ -1,0 +1,17 @@
+{
+  "appId": "com.selfsystem.control",
+  "appName": "数字分身",
+  "webDir": "dist",
+  "server": {
+    "url": "https://your-control-domain.com",
+    "cleartext": true
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "backgroundColor": "#fcfbf9"
+  },
+  "android": {
+    "backgroundColor": "#fcfbf9",
+    "allowMixedContent": true
+  }
+}

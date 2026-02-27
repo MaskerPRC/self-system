@@ -65,3 +65,8 @@
 
 /* View container height */
 .view-container { height: 100dvh; width: 100vw; }
+
+/* Safe area for Capacitor native apps (iOS notch, home indicator) */
+.safe-top { padding-top: env(safe-area-inset-top, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-bottom-nav { bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }

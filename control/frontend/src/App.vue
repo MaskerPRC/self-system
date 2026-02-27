@@ -36,7 +36,7 @@
   </div>
 
   <!-- Main App -->
-  <div v-else class="bg-surface text-ink-900 overflow-hidden flex flex-col font-sans antialiased selection:bg-brand-100 selection:text-brand-600 view-container">
+  <div v-else class="bg-surface text-ink-900 overflow-hidden flex flex-col font-sans antialiased selection:bg-brand-100 selection:text-brand-600 view-container safe-top">
     <!-- Main area: flex row for content + log panel -->
     <div class="flex-1 flex min-h-0">
       <!-- Page content -->
@@ -72,7 +72,7 @@
     </div>
 
     <!-- Bottom Navigation -->
-    <nav class="fixed bottom-6 left-2 right-2 bg-paper/80 backdrop-blur-xl border border-stone-200 px-2 py-1.5 flex gap-0.5 z-50 rounded-2xl shadow-pill sm:bottom-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:rounded-full sm:px-1.5 sm:gap-1">
+    <nav class="fixed safe-bottom-nav left-2 right-2 bg-paper/80 backdrop-blur-xl border border-stone-200 px-2 py-1.5 flex gap-0.5 z-50 rounded-2xl shadow-pill sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:rounded-full sm:px-1.5 sm:gap-1">
       <router-link
         to="/"
         class="relative flex-1 sm:flex-initial px-2 sm:px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"
