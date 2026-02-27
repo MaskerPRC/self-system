@@ -72,7 +72,7 @@
     </div>
 
     <!-- Bottom Navigation -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-paper/80 backdrop-blur-xl border-t border-stone-200 px-2 py-1.5 flex gap-0.5 z-50 sm:bottom-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:border sm:border-t-stone-200 sm:shadow-pill sm:rounded-full sm:px-1.5 sm:gap-1">
+    <nav class="fixed bottom-3 left-2 right-2 bg-paper/80 backdrop-blur-xl border border-stone-200 px-2 py-1.5 flex gap-0.5 z-50 rounded-2xl shadow-pill sm:bottom-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:rounded-full sm:px-1.5 sm:gap-1">
       <router-link
         to="/"
         class="relative flex-1 sm:flex-initial px-2 sm:px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"

@@ -1,7 +1,7 @@
 <template>
   <div class="absolute inset-0 w-full h-full overflow-y-auto pb-32">
     <!-- Elegant Header -->
-    <div class="max-w-7xl mx-auto px-6 pt-12 pb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6">
+    <div class="max-w-7xl mx-auto px-6 pt-5 sm:pt-12 pb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6">
       <div>
         <h1 class="text-3xl font-serif font-semibold tracking-tight text-ink-900">交互集合</h1>
         <p class="text-ink-500 mt-2 font-medium">所有的分身与页面，皆陈列于此。</p>
