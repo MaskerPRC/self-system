@@ -541,18 +541,19 @@ app.get('/api/app/files', async (req, res) => {
     const dirPath = safePath(req.query.path || '/app');
     if (!dirPath) return res.status(400).json({ success: false, error: '非法路径' });
 
-    // ls -la 输出格式化为 JSON
-    const cmd = `docker exec ${APP_CONTAINER} sh -c "ls -la --time-style=long-iso '${dirPath}' 2>&1"`;
+    // 用 ls -la（兼容 BusyBox/Alpine）
+    const cmd = `docker exec ${APP_CONTAINER} sh -c "ls -la '${dirPath}' 2>&1"`;
     const output = await dockerExecCmd(cmd);
     const lines = output.split('\n').filter(l => l.trim() && !l.startsWith('total'));
     const items = [];
     for (const line of lines) {
+      // BusyBox ls -la 格式: perms links owner group size month day time/year name
       const parts = line.split(/\s+/);
       if (parts.length < 8) continue;
       const perms = parts[0];
       const size = parseInt(parts[4]) || 0;
-      const date = parts[5] + ' ' + parts[6];
-      const name = parts.slice(7).join(' ');
+      const date = parts[5] + ' ' + parts[6] + ' ' + parts[7];
+      const name = parts.slice(8).join(' ');
       if (name === '.' || name === '..') continue;
       items.push({
         name,
@@ -576,8 +577,8 @@ app.get('/api/app/files/content', async (req, res) => {
     const filePath = safePath(req.query.path);
     if (!filePath) return res.status(400).json({ success: false, error: '非法路径' });
 
-    // 先检查是否为文件、大小是否合理
-    const sizeCmd = `docker exec ${APP_CONTAINER} sh -c "stat -c '%s' '${filePath}' 2>&1"`;
+    // 先检查文件大小（wc -c 兼容 BusyBox）
+    const sizeCmd = `docker exec ${APP_CONTAINER} sh -c "wc -c < '${filePath}' 2>/dev/null || echo -1"`;
     const sizeStr = (await dockerExecCmd(sizeCmd)).trim();
     const fileSize = parseInt(sizeStr);
     if (isNaN(fileSize)) return res.status(404).json({ success: false, error: '文件不存在' });
