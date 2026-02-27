@@ -32,6 +32,9 @@ services:
       - GIT_USER_EMAIL=${GIT_USER_EMAIL:-bot@digital-avatar.local}
       - GIT_REMOTE_URL=${GIT_REMOTE_URL}
       - GIT_AUTO_PUSH=${GIT_AUTO_PUSH:-true}
+      # 登录鉴权（留空则不启用鉴权）
+      - AUTH_USERNAME=${AUTH_USERNAME}
+      - AUTH_PASSWORD=${AUTH_PASSWORD}
     restart: unless-stopped
     stdin_open: true
     tty: true
@@ -54,6 +57,9 @@ services:
     environment:
       # Vite proxy 通过 Docker 网络访问控制后端
       - CONTROL_BACKEND_URL=http://control:3000
+      # 登录鉴权（与控制端共享凭据）
+      - AUTH_USERNAME=${AUTH_USERNAME}
+      - AUTH_PASSWORD=${AUTH_PASSWORD}
     restart: unless-stopped
     networks:
       - app-network

@@ -13,6 +13,7 @@ import { startAppProject, stopAppProject, restartAppProject, getAppStatus, getAp
 import { registerHeartbeat, getAllPages, getActivePages, startHeartbeatChecker } from './modules/heartbeat.js';
 import { getSkills, getSkill, createSkill, updateSkill, deleteSkill } from './modules/skills.js';
 import { initGitRepo, commitChanges, getCommitHistory, checkoutCommit, getGitStatus, getGitRemoteConfig, updateGitRemoteConfig, pushToRemote } from './modules/git.js';
+import { authMiddleware, createSession, destroySession, isAuthEnabled, validateSession, parseCookie, COOKIE_NAME, SESSION_MAX_AGE } from './modules/auth.js';
 import PQueue from 'p-queue';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -25,8 +26,44 @@ const requestQueue = new PQueue({ concurrency: 1 });
 
 app.use(cors());
 app.use(express.json());
+app.use(authMiddleware);
 
 setupWebSocket(server);
+
+// ==================== 鉴权 API ====================
+
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: '用户名和密码必填' });
+  }
+  const token = createSession(username, password);
+  if (!token) {
+    return res.status(401).json({ success: false, error: '用户名或密码错误' });
+  }
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    maxAge: SESSION_MAX_AGE,
+    sameSite: 'lax',
+    secure: req.secure
+  });
+  res.json({ success: true });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  const token = parseCookie(req.headers);
+  if (token) destroySession(token);
+  res.clearCookie(COOKIE_NAME);
+  res.json({ success: true });
+});
+
+app.get('/api/auth/check', (req, res) => {
+  if (!isAuthEnabled()) {
+    return res.json({ success: true, authEnabled: false });
+  }
+  const token = parseCookie(req.headers);
+  res.json({ success: true, authEnabled: true, authenticated: validateSession(token) });
+});
 
 // ==================== 健康检查 ====================
 

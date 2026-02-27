@@ -10,6 +10,10 @@ export default defineConfig({
     port: 5174,
     host: '0.0.0.0',
     proxy: {
+      '/api/auth': {
+        target: 'http://localhost:3001',
+        changeOrigin: true
+      },
       '/api/app': {
         target: 'http://localhost:3001',
         changeOrigin: true

@@ -1,5 +1,42 @@
 <template>
-  <div class="bg-surface text-ink-900 overflow-hidden flex flex-col font-sans antialiased selection:bg-brand-100 selection:text-brand-600 view-container">
+  <!-- Loading -->
+  <div v-if="authLoading" class="min-h-screen flex items-center justify-center bg-surface">
+    <div class="text-ink-400 text-sm">加载中...</div>
+  </div>
+
+  <!-- Login -->
+  <div v-else-if="needLogin" class="min-h-screen flex items-center justify-center bg-surface px-4">
+    <form @submit.prevent="handleLogin" class="w-full max-w-sm">
+      <div class="flex items-center justify-center mb-8">
+        <div class="w-14 h-14 bg-brand-50 rounded-2xl flex items-center justify-center">
+          <i class="ph-fill ph-fingerprint text-3xl text-brand-500"></i>
+        </div>
+      </div>
+      <h1 class="text-xl font-serif font-semibold text-ink-900 text-center mb-6">数字分身控制台</h1>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-ink-600 mb-1.5">用户名</label>
+          <input v-model="loginForm.username" type="text" autocomplete="username"
+            class="w-full px-3.5 py-2.5 text-sm bg-paper border border-stone-200 rounded-xl outline-none focus:border-brand-400 transition-colors" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-ink-600 mb-1.5">密码</label>
+          <input v-model="loginForm.password" type="password" autocomplete="current-password"
+            class="w-full px-3.5 py-2.5 text-sm bg-paper border border-stone-200 rounded-xl outline-none focus:border-brand-400 transition-colors" />
+        </div>
+        <div v-if="loginError" class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {{ loginError }}
+        </div>
+        <button type="submit" :disabled="loginLoading"
+          class="w-full py-2.5 bg-brand-500 text-white rounded-xl text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors">
+          {{ loginLoading ? '登录中...' : '登录' }}
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Main App -->
+  <div v-else class="bg-surface text-ink-900 overflow-hidden flex flex-col font-sans antialiased selection:bg-brand-100 selection:text-brand-600 view-container">
     <!-- Main area: flex row for content + log panel -->
     <div class="flex-1 flex min-h-0">
       <!-- Page content -->
@@ -93,6 +130,61 @@ import LogPanel from './components/LogPanel.vue'
 const API = ''
 const MAX_LOG_LINES = 500
 
+// ---- Auth ----
+
+const authLoading = ref(true)
+const needLogin = ref(false)
+const loginForm = ref({ username: '', password: '' })
+const loginError = ref('')
+const loginLoading = ref(false)
+
+async function checkAuth() {
+  try {
+    const r = await fetch(`${API}/api/auth/check`)
+    const d = await r.json()
+    needLogin.value = d.authEnabled && !d.authenticated
+  } catch {
+    needLogin.value = false
+  } finally {
+    authLoading.value = false
+  }
+}
+
+async function handleLogin() {
+  loginLoading.value = true
+  loginError.value = ''
+  try {
+    const r = await fetch(`${API}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(loginForm.value)
+    })
+    const d = await r.json()
+    if (d.success) {
+      needLogin.value = false
+      connectWs()
+    } else {
+      loginError.value = d.error || '登录失败'
+    }
+  } catch (e) {
+    loginError.value = '网络错误'
+  } finally {
+    loginLoading.value = false
+  }
+}
+
+// Intercept 401 responses globally
+const _origFetch = window.fetch
+window.fetch = async (...args) => {
+  const res = await _origFetch(...args)
+  if (res.status === 401 && !(args[0] + '').includes('/api/auth/')) {
+    needLogin.value = true
+  }
+  return res
+}
+
+// ---- App State ----
+
 const showSettings = ref(false)
 const showLogs = ref(false)
 const activeLogTab = ref('app')
@@ -105,11 +197,7 @@ let ws = null
 // ---- Resize ----
 
 const panelStyle = computed(() => {
-  // Mobile: full screen (handled by fixed inset-0)
-  // Desktop: fixed width via inline style
-  return {
-    width: logPanelWidth.value + 'px'
-  }
+  return { width: logPanelWidth.value + 'px' }
 })
 
 let resizing = false
@@ -160,7 +248,6 @@ function stopResize() {
 
 // ---- Log Management ----
 
-// Strip ANSI escape codes from log text
 const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07/g
 function stripAnsi(str) {
   return str.replace(ANSI_RE, '')
@@ -225,8 +312,11 @@ function connectWs() {
   ws.onclose = () => { setTimeout(connectWs, 5000) }
 }
 
-onMounted(() => {
-  connectWs()
+onMounted(async () => {
+  await checkAuth()
+  if (!needLogin.value) {
+    connectWs()
+  }
 })
 
 onUnmounted(() => {

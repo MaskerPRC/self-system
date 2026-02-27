@@ -1,4 +1,5 @@
 import { WebSocketServer } from 'ws';
+import { isAuthEnabled, validateSession, parseCookie } from './auth.js';
 
 let wss = null;
 const clients = new Set();
@@ -12,7 +13,16 @@ const processingConversations = new Set();
 export function setupWebSocket(server) {
   wss = new WebSocketServer({ server });
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
+    // Auth check
+    if (isAuthEnabled()) {
+      const token = parseCookie(req.headers);
+      if (!validateSession(token)) {
+        ws.close(4001, 'Unauthorized');
+        return;
+      }
+    }
+
     console.log('[WebSocket] 新客户端连接');
     clients.add(ws);
 
