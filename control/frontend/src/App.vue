@@ -72,48 +72,48 @@
     </div>
 
     <!-- Bottom Navigation -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-paper/80 backdrop-blur-xl border-t border-stone-200 p-1.5 flex gap-1 z-50 sm:bottom-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:border sm:border-t-stone-200 sm:shadow-pill sm:rounded-full">
+    <nav class="fixed bottom-0 left-0 right-0 bg-paper/80 backdrop-blur-xl border-t border-stone-200 px-2 py-1.5 flex gap-0.5 z-50 sm:bottom-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:border sm:border-t-stone-200 sm:shadow-pill sm:rounded-full sm:px-1.5 sm:gap-1">
       <router-link
         to="/"
-        class="relative flex-1 sm:flex-initial px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"
+        class="relative flex-1 sm:flex-initial px-2 sm:px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"
         :class="$route.name === 'collection' ? 'text-brand-700 bg-brand-50' : 'text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50'"
       >
-        <i class="text-lg" :class="$route.name === 'collection' ? 'ph-fill ph-cards' : 'ph ph-cards'"></i>
-        <span>页面集合</span>
+        <i class="text-xl sm:text-lg" :class="$route.name === 'collection' ? 'ph-fill ph-cards' : 'ph ph-cards'"></i>
+        <span class="hidden sm:inline">页面集合</span>
       </router-link>
 
       <router-link
         to="/featured"
-        class="relative flex-1 sm:flex-initial px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"
+        class="relative flex-1 sm:flex-initial px-2 sm:px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"
         :class="$route.name === 'featured' ? 'text-amber-700 bg-amber-50' : 'text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50'"
       >
-        <i class="text-lg" :class="$route.name === 'featured' ? 'ph-fill ph-star' : 'ph ph-star'"></i>
-        <span>精选</span>
+        <i class="text-xl sm:text-lg" :class="$route.name === 'featured' ? 'ph-fill ph-star' : 'ph ph-star'"></i>
+        <span class="hidden sm:inline">精选</span>
       </router-link>
 
       <router-link
         to="/chat"
-        class="relative flex-1 sm:flex-initial px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"
+        class="relative flex-1 sm:flex-initial px-2 sm:px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"
         :class="$route.name === 'chat' ? 'text-brand-700 bg-brand-50' : 'text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50'"
       >
-        <i class="text-lg" :class="$route.name === 'chat' ? 'ph-fill ph-chat-teardrop' : 'ph ph-chat-teardrop'"></i>
-        <span>AI 对话</span>
+        <i class="text-xl sm:text-lg" :class="$route.name === 'chat' ? 'ph-fill ph-chat-teardrop' : 'ph ph-chat-teardrop'"></i>
+        <span class="hidden sm:inline">AI 对话</span>
       </router-link>
 
       <button
         @click="toggleLogs"
-        class="relative px-3 sm:px-4 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center no-underline whitespace-nowrap"
+        class="relative flex-1 sm:flex-initial px-2 sm:px-4 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center no-underline whitespace-nowrap"
         :class="showLogs ? 'text-brand-700 bg-brand-50' : 'text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50'"
       >
-        <i class="ph ph-terminal-window text-lg"></i>
+        <i class="ph ph-terminal-window text-xl sm:text-lg"></i>
         <span v-if="hasNewLogs" class="absolute top-2 right-2 sm:top-2.5 sm:right-3 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
       </button>
 
       <button
         @click="showSettings = true"
-        class="relative px-3 sm:px-4 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center no-underline whitespace-nowrap text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50"
+        class="relative flex-1 sm:flex-initial px-2 sm:px-4 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center no-underline whitespace-nowrap text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50"
       >
-        <i class="ph ph-gear-six text-lg"></i>
+        <i class="ph ph-gear-six text-xl sm:text-lg"></i>
       </button>
     </nav>
 
@@ -196,7 +196,11 @@ let ws = null
 
 // ---- Resize ----
 
+const isMobile = ref(window.innerWidth < 640)
+window.addEventListener('resize', () => { isMobile.value = window.innerWidth < 640 })
+
 const panelStyle = computed(() => {
+  if (isMobile.value) return {}
   return { width: logPanelWidth.value + 'px' }
 })
 
