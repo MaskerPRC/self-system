@@ -92,6 +92,59 @@
           <!-- Divider -->
           <div class="border-t border-stone-200 my-6"></div>
 
+          <!-- Git Remote Config Section -->
+          <div>
+            <div class="mb-4">
+              <h3 class="font-medium text-ink-900">Git 远程仓库</h3>
+              <p class="text-xs text-ink-500 mt-0.5">配置远程仓库地址和访问令牌，支持自动推送代码</p>
+            </div>
+
+            <div class="space-y-3">
+              <div>
+                <label class="text-xs font-medium text-ink-700 mb-1 block">仓库地址</label>
+                <input v-model="remoteConfig.repoUrl"
+                  placeholder="https://github.com/user/repo.git"
+                  class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
+              </div>
+              <div>
+                <label class="text-xs font-medium text-ink-700 mb-1 block">PAT Token</label>
+                <div class="relative">
+                  <input
+                    :type="showToken ? 'text' : 'password'"
+                    v-model="remoteConfig.token"
+                    placeholder="ghp_xxxxxxxxxxxx"
+                    class="w-full px-3 py-2 pr-9 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
+                  <button @click="showToken = !showToken"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-ink-400 hover:text-ink-700 transition-colors">
+                    <i :class="showToken ? 'ph ph-eye-slash' : 'ph ph-eye'" class="text-sm"></i>
+                  </button>
+                </div>
+                <p v-if="remoteConfig.hasToken && !remoteConfig.token" class="text-[11px] text-emerald-600 mt-1">
+                  <i class="ph-fill ph-check-circle mr-0.5"></i>已配置（留空保持不变，输入新值可覆盖）
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button @click="saveRemoteConfig"
+                  :disabled="remoteSaving"
+                  class="text-xs font-medium px-4 py-1.5 bg-brand-500 text-white rounded-full hover:bg-brand-600 disabled:opacity-40 transition-colors">
+                  {{ remoteSaving ? '保存中...' : '保存配置' }}
+                </button>
+                <button @click="testPush"
+                  :disabled="remotePushing || !remoteConfig.repoUrl"
+                  class="text-xs font-medium px-4 py-1.5 rounded-full border border-stone-200 text-ink-600 hover:bg-stone-50 disabled:opacity-40 transition-colors">
+                  {{ remotePushing ? '推送中...' : '测试推送' }}
+                </button>
+              </div>
+              <div v-if="remoteMessage" class="p-3 rounded-lg text-xs font-medium"
+                :class="remoteMessageError ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'">
+                {{ remoteMessage }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Divider -->
+          <div class="border-t border-stone-200 my-6"></div>
+
           <!-- Git Version Section -->
           <div>
             <div class="flex items-center justify-between mb-4">
@@ -166,6 +219,13 @@ const gitLoading = ref(false)
 const gitMessage = ref('')
 const gitMessageError = ref(false)
 
+const remoteConfig = ref({ repoUrl: '', token: '', hasToken: false })
+const showToken = ref(false)
+const remoteSaving = ref(false)
+const remotePushing = ref(false)
+const remoteMessage = ref('')
+const remoteMessageError = ref(false)
+
 async function fetchSkills() {
   try {
     const r = await fetch(`${API}/api/skills`)
@@ -201,8 +261,71 @@ async function handleDelete(name) {
 }
 
 watch(() => props.visible, (v) => {
-  if (v) { fetchSkills(); fetchCommits() }
+  if (v) { fetchSkills(); fetchCommits(); fetchRemoteConfig() }
 })
+
+async function fetchRemoteConfig() {
+  try {
+    const r = await fetch(`${API}/api/git/remote-config`)
+    const d = await r.json()
+    if (d.success) {
+      remoteConfig.value.repoUrl = d.data.repoUrl || ''
+      remoteConfig.value.hasToken = d.data.hasToken || false
+      remoteConfig.value.token = ''  // 不回显 token
+    }
+  } catch {}
+}
+
+async function saveRemoteConfig() {
+  remoteSaving.value = true
+  remoteMessage.value = ''
+  try {
+    const body = { repoUrl: remoteConfig.value.repoUrl }
+    // 只有用户输入了新 token 才发送
+    if (remoteConfig.value.token) body.token = remoteConfig.value.token
+    const r = await fetch(`${API}/api/git/remote-config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    const d = await r.json()
+    if (d.success) {
+      remoteMessage.value = '远程仓库配置已保存'
+      remoteMessageError.value = false
+      remoteConfig.value.hasToken = d.data.hasToken
+      remoteConfig.value.token = ''
+    } else {
+      remoteMessage.value = `保存失败: ${d.error}`
+      remoteMessageError.value = true
+    }
+  } catch (e) {
+    remoteMessage.value = `保存失败: ${e.message}`
+    remoteMessageError.value = true
+  } finally {
+    remoteSaving.value = false
+  }
+}
+
+async function testPush() {
+  remotePushing.value = true
+  remoteMessage.value = ''
+  try {
+    const r = await fetch(`${API}/api/git/push`, { method: 'POST' })
+    const d = await r.json()
+    if (d.success) {
+      remoteMessage.value = '推送成功!'
+      remoteMessageError.value = false
+    } else {
+      remoteMessage.value = `推送失败: ${d.error}`
+      remoteMessageError.value = true
+    }
+  } catch (e) {
+    remoteMessage.value = `推送失败: ${e.message}`
+    remoteMessageError.value = true
+  } finally {
+    remotePushing.value = false
+  }
+}
 
 async function fetchCommits() {
   gitLoading.value = true

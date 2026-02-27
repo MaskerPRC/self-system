@@ -12,7 +12,7 @@ import { callClaudeCode, verifyAndFixApp } from './modules/claude.js';
 import { startAppProject, stopAppProject, restartAppProject, getAppStatus, getAppLogs, getAppLogsSince, getControlLogs, getControlLogsSince } from './modules/process.js';
 import { registerHeartbeat, getAllPages, getActivePages, startHeartbeatChecker } from './modules/heartbeat.js';
 import { getSkills, getSkill, createSkill, updateSkill, deleteSkill } from './modules/skills.js';
-import { initGitRepo, commitChanges, getCommitHistory, checkoutCommit, getGitStatus } from './modules/git.js';
+import { initGitRepo, commitChanges, getCommitHistory, checkoutCommit, getGitStatus, getGitRemoteConfig, updateGitRemoteConfig, pushToRemote } from './modules/git.js';
 import PQueue from 'p-queue';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -446,6 +446,36 @@ app.post('/api/git/checkout', async (req, res) => {
     }
 
     res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== Git 远程配置 API ====================
+
+app.get('/api/git/remote-config', (req, res) => {
+  try {
+    const data = getGitRemoteConfig();
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/git/remote-config', async (req, res) => {
+  try {
+    const { repoUrl, token } = req.body;
+    await updateGitRemoteConfig(repoUrl, token);
+    res.json({ success: true, data: getGitRemoteConfig() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/git/push', async (req, res) => {
+  try {
+    await pushToRemote();
+    res.json({ success: true, message: 'Push 成功' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
