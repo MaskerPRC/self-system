@@ -67,7 +67,8 @@ export async function checkClaudeCode() {
  */
 function runClaude(prompt, projectRoot, conversationId) {
   return new Promise((res, reject) => {
-    const claudeArgs = ['--model', 'opus', '--dangerously-skip-permissions', '-p', prompt];
+    const model = process.env.CLAUDE_MODEL || 'opus';
+    const claudeArgs = ['--model', model, '--dangerously-skip-permissions', '-p', prompt];
     const spawnEnv = { ...process.env };
 
     // 以非 root 用户运行（--dangerously-skip-permissions 要求）

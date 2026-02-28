@@ -9,11 +9,52 @@ echo "=========================================="
 
 # ---- 配置 Claude Code ----
 echo "[配置] 正在配置 Claude Code..."
-if [ -n "$CLAUDE_CODE_URL" ] && [ -n "$CLAUDE_CODE_KEY" ]; then
+
+if [ -n "$ZHIPU_API_KEY" ]; then
+    # ===== 智谱 GLM5 模式 =====
+    echo "[配置] 检测到 ZHIPU_API_KEY，使用智谱 GLM5 模式"
+
+    ANTHROPIC_BASE_URL="https://open.bigmodel.cn/api/anthropic"
+    API_TIMEOUT_MS="3000000"
+
+    # 配置 ~/.claude.json（跳过 onboarding）
+    node --eval '
+        const fs = require("fs");
+        const path = require("path");
+        const filePath = path.join(process.env.HOME || "/root", ".claude.json");
+        const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
+        fs.writeFileSync(filePath, JSON.stringify({ ...content, hasCompletedOnboarding: true }, null, 2));
+    '
+
+    # 配置 ~/.claude/settings.json
+    mkdir -p "${HOME}/.claude"
+    node --eval '
+        const fs = require("fs");
+        const path = require("path");
+        const filePath = path.join(process.env.HOME || "/root", ".claude", "settings.json");
+        const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
+        fs.writeFileSync(filePath, JSON.stringify({
+            ...content,
+            env: {
+                ...(content.env || {}),
+                ANTHROPIC_AUTH_TOKEN: process.env.ZHIPU_API_KEY,
+                ANTHROPIC_BASE_URL: "'"${ANTHROPIC_BASE_URL}"'",
+                API_TIMEOUT_MS: "'"${API_TIMEOUT_MS}"'",
+                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+            }
+        }, null, 2));
+    '
+
+    echo "[配置] 智谱 GLM5 配置完成"
+
+elif [ -n "$CLAUDE_CODE_URL" ] && [ -n "$CLAUDE_CODE_KEY" ]; then
+    # ===== 原有代理模式 =====
+    echo "[配置] 使用代理模式: ${CLAUDE_CODE_URL}"
     curl -s ${CLAUDE_CODE_URL}/setup-claude-code.sh | bash -s -- --url ${CLAUDE_CODE_URL} --key ${CLAUDE_CODE_KEY}
     echo "[配置] Claude Code 配置完成"
+
 else
-    echo "[警告] 未设置 CLAUDE_CODE_URL 或 CLAUDE_CODE_KEY"
+    echo "[警告] 未设置 ZHIPU_API_KEY 或 CLAUDE_CODE_URL/CLAUDE_CODE_KEY"
 fi
 
 # 将 Claude 配置复制到非 root 用户（--dangerously-skip-permissions 需要非 root）
@@ -21,6 +62,10 @@ echo "[配置] 设置 claude 用户权限..."
 if [ -d /root/.claude ]; then
     cp -r /root/.claude /home/claude/.claude
     chown -R claude:claude /home/claude
+fi
+if [ -f /root/.claude.json ]; then
+    cp /root/.claude.json /home/claude/.claude.json
+    chown claude:claude /home/claude/.claude.json
 fi
 chown -R claude:claude /app
 
