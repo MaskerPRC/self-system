@@ -51,7 +51,6 @@ async function refreshPublicRoutes() {
     const data = await res.json();
     if (data.success && Array.isArray(data.data)) {
       publicRoutes = new Set(data.data);
-      console.log(`[Auth] 公开路由已更新: ${[...publicRoutes].join(', ') || '(无)'}`);
     }
   } catch (e) {
     console.warn('[Auth] 拉取公开路由失败:', e.message);
