@@ -5,8 +5,8 @@
       <p class="auth-hint">加载中...</p>
     </div>
 
-    <!-- Login -->
-    <div v-else-if="needLogin" class="auth-center">
+    <!-- Login (only for non-public routes) -->
+    <div v-else-if="needLogin && !isCurrentRoutePublic" class="auth-center">
       <form @submit.prevent="handleLogin" class="auth-form">
         <h1 class="auth-title">Digital Avatar</h1>
         <div class="auth-field">
@@ -30,19 +30,41 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 
+const route = useRoute()
 const authLoading = ref(true)
 const needLogin = ref(false)
+const publicRoutes = ref(new Set())
 const loginForm = ref({ username: '', password: '' })
 const loginError = ref('')
 const loginLoading = ref(false)
 
+const isCurrentRoutePublic = computed(() => {
+  return publicRoutes.value.has(route.path)
+})
+
+async function fetchPublicRoutes() {
+  try {
+    const r = await fetch('/api/auth/public-routes')
+    const d = await r.json()
+    if (d.success && Array.isArray(d.data)) {
+      publicRoutes.value = new Set(d.data)
+    }
+  } catch {}
+}
+
 async function checkAuth() {
   try {
-    const r = await fetch('/api/auth/check')
-    const d = await r.json()
-    needLogin.value = d.authEnabled && !d.authenticated
+    await Promise.all([
+      fetchPublicRoutes(),
+      (async () => {
+        const r = await fetch('/api/auth/check')
+        const d = await r.json()
+        needLogin.value = d.authEnabled && !d.authenticated
+      })()
+    ])
   } catch {
     needLogin.value = false
   } finally {
@@ -72,12 +94,14 @@ async function handleLogin() {
   }
 }
 
-// Intercept 401 globally
+// Intercept 401 globally, but not for public routes
 const _origFetch = window.fetch
 window.fetch = async (...args) => {
   const res = await _origFetch(...args)
   if (res.status === 401 && !(args[0] + '').includes('/api/auth/')) {
-    needLogin.value = true
+    if (!isCurrentRoutePublic.value) {
+      needLogin.value = true
+    }
   }
   return res
 }

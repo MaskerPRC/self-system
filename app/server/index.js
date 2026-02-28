@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { authMiddleware, createSession, destroySession, isAuthEnabled, validateSession, COOKIE_NAME, SESSION_MAX_AGE } from './auth.js';
+import { authMiddleware, createSession, destroySession, isAuthEnabled, validateSession, COOKIE_NAME, SESSION_MAX_AGE, startPublicRoutesSync, getPublicRoutes } from './auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -8,6 +8,9 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 app.use(authMiddleware);
+
+// 启动公开路由同步
+startPublicRoutesSync();
 
 // ==================== 鉴权 API ====================
 
@@ -46,6 +49,11 @@ app.get('/api/auth/check', (req, res) => {
   const match = header.match(new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]*)`));
   const token = match ? match[1] : null;
   res.json({ success: true, authEnabled: true, authenticated: validateSession(token) });
+});
+
+// 返回公开路由列表给前端
+app.get('/api/auth/public-routes', (req, res) => {
+  res.json({ success: true, data: getPublicRoutes() });
 });
 
 // 健康检查

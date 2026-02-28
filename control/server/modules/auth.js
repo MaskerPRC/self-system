@@ -42,7 +42,7 @@ export function authMiddleware(req, res, next) {
   if (!isAuthEnabled()) return next();
 
   // Exempt paths
-  if (req.path.startsWith('/api/auth/') || req.path === '/api/health' || req.path === '/api/heartbeat') {
+  if (req.path.startsWith('/api/auth/') || req.path === '/api/health' || req.path === '/api/heartbeat' || req.path === '/api/pages/public-routes') {
     return next();
   }
 

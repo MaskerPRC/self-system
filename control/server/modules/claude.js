@@ -193,7 +193,10 @@ ${requirement}
 [PAGE_INFO]
 route: /<你添加的路由path>
 title: <页面标题>
+public: <true 或 false，如果用户要求页面公开访问（不需要登录）则为 true，默认 false>
 [/PAGE_INFO]
+
+注意：如果用户提到"公开"、"公开访问"、"不需要登录"、"任何人可访问"等，请设置 public: true。公开页面无需登录即可访问。默认情况下页面为私有（需要登录）。
 
 类型三：创建 Skill
 如果用户要求创建/新增一个 Skill（例如用户提供了 API 文档、API Key，并要求制作对应的 skill），请：

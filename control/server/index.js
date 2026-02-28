@@ -257,7 +257,8 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
               title: pageInfo.title,
               description: pageInfo.description,
               route_path: pageInfo.routePath,
-              status: 'active'
+              status: 'active',
+              is_public: pageInfo.isPublic || false
             });
         }
 
@@ -417,6 +418,44 @@ app.delete('/api/pages/:id/feature', async (req, res) => {
   try {
     const supabase = getSupabase();
     const { error } = await supabase.from('interactive_pages').update({ is_featured: false }).eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== 公开页面 API ====================
+
+app.get('/api/pages/public-routes', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('interactive_pages')
+      .select('route_path')
+      .eq('is_public', true);
+    if (error) throw error;
+    res.json({ success: true, data: data.map(p => p.route_path) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/pages/:id/public', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { error } = await supabase.from('interactive_pages').update({ is_public: true, updated_at: new Date().toISOString() }).eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/pages/:id/public', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { error } = await supabase.from('interactive_pages').update({ is_public: false, updated_at: new Date().toISOString() }).eq('id', req.params.id);
     if (error) throw error;
     res.json({ success: true });
   } catch (error) {
@@ -735,6 +774,26 @@ app.post('/api/app/files/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+// 下载文件
+app.get('/api/app/files/download', async (req, res) => {
+  try {
+    const filePath = safePath(req.query.path);
+    if (!filePath) return res.status(400).json({ success: false, error: '非法路径' });
+
+    const fileName = filePath.split('/').pop();
+    const cmd = `docker exec ${APP_CONTAINER} sh -c "cat '${filePath}' | base64"`;
+    const base64Data = (await dockerExecCmd(cmd)).replace(/\s/g, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 删除文件/目录
 app.delete('/api/app/files', async (req, res) => {
   try {
@@ -861,12 +920,13 @@ async function extractAndSaveSkill(output) {
 function extractPageInfo(output, requirement) {
   // 如果输出中没有 [PAGE_INFO] 标记，直接返回 null
   // 避免在 skill-only 请求中错误地生成页面信息
-  const pageInfoMatch = output.match(/\[PAGE_INFO\]\s*\n?\s*route:\s*(\S+)\s*\n?\s*title:\s*(.+?)\s*\n?\s*\[\/PAGE_INFO\]/);
+  const pageInfoMatch = output.match(/\[PAGE_INFO\]\s*\n?\s*route:\s*(\S+)\s*\n?\s*title:\s*(.+?)\s*\n?(?:\s*public:\s*(true|false)\s*\n?)?\s*\[\/PAGE_INFO\]/);
   if (pageInfoMatch) {
     return {
       title: pageInfoMatch[2].trim(),
       description: requirement.slice(0, 200),
-      routePath: pageInfoMatch[1]
+      routePath: pageInfoMatch[1],
+      isPublic: pageInfoMatch[3] === 'true'
     };
   }
 

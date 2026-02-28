@@ -30,7 +30,7 @@
     <!-- Page Cards -->
     <div class="max-w-7xl mx-auto px-6">
       <div v-if="pages.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <PageCard v-for="p in pages" :key="p.id" :page="p" @open="openPage" @delete="deletePage" @preview="previewPage" @feature="toggleFeature" />
+        <PageCard v-for="p in pages" :key="p.id" :page="p" @open="openPage" @delete="deletePage" @preview="previewPage" @feature="toggleFeature" @togglePublic="togglePublic" />
       </div>
 
       <!-- Empty State -->
@@ -106,7 +106,7 @@
       </div>
     </div>
 
-    <!-- File Viewer Modal -->
+    <!-- File Viewer Modal (Text Files) -->
     <Teleport to="body">
       <Transition name="drawer-backdrop">
         <div v-if="fileViewerVisible" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100]" @click="fileViewerVisible = false"></div>
@@ -118,12 +118,53 @@
           </div>
           <div class="flex items-center justify-between px-5 pb-3 border-b border-stone-200">
             <span class="text-sm font-mono text-ink-600 truncate">{{ fileViewerPath }}</span>
-            <button @click="fileViewerVisible = false" class="w-8 h-8 rounded-full flex items-center justify-center text-ink-500 hover:text-ink-900 hover:bg-stone-100 transition-colors">
-              <i class="ph ph-x text-lg"></i>
-            </button>
+            <div class="flex items-center gap-1 shrink-0 ml-3">
+              <button @click="copyFileContent" class="w-8 h-8 rounded-full flex items-center justify-center transition-colors" :class="copied ? 'text-emerald-500' : 'text-ink-500 hover:text-brand-600 hover:bg-brand-50'" :title="copied ? '已复制' : '复制'">
+                <i class="text-lg" :class="copied ? 'ph-fill ph-check' : 'ph ph-copy'"></i>
+              </button>
+              <button @click="downloadFile(fileViewerPath)" class="w-8 h-8 rounded-full flex items-center justify-center text-ink-500 hover:text-brand-600 hover:bg-brand-50 transition-colors" title="下载">
+                <i class="ph ph-download-simple text-lg"></i>
+              </button>
+              <button @click="fileViewerVisible = false" class="w-8 h-8 rounded-full flex items-center justify-center text-ink-500 hover:text-ink-900 hover:bg-stone-100 transition-colors">
+                <i class="ph ph-x text-lg"></i>
+              </button>
+            </div>
           </div>
           <div class="flex-1 min-h-0 overflow-auto p-5">
             <pre class="text-xs font-mono text-ink-800 whitespace-pre-wrap break-all leading-relaxed">{{ fileViewerContent }}</pre>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- File Viewer Modal (Non-Text Files) -->
+    <Teleport to="body">
+      <Transition name="drawer-backdrop">
+        <div v-if="binaryViewerVisible" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100]" @click="binaryViewerVisible = false"></div>
+      </Transition>
+      <Transition name="drawer">
+        <div v-if="binaryViewerVisible" class="fixed inset-x-0 bottom-0 z-[101] flex flex-col bg-paper rounded-t-2xl shadow-2xl" style="max-height: 60vh;">
+          <div class="flex items-center justify-center pt-3 pb-1 cursor-grab" @click="binaryViewerVisible = false">
+            <div class="w-10 h-1 bg-stone-300 rounded-full"></div>
+          </div>
+          <div class="flex items-center justify-between px-5 pb-3 border-b border-stone-200">
+            <span class="text-sm font-mono text-ink-600 truncate">{{ binaryViewerFile.name }}</span>
+            <button @click="binaryViewerVisible = false" class="w-8 h-8 rounded-full flex items-center justify-center text-ink-500 hover:text-ink-900 hover:bg-stone-100 transition-colors">
+              <i class="ph ph-x text-lg"></i>
+            </button>
+          </div>
+          <div class="flex flex-col items-center justify-center py-12 px-5 gap-5">
+            <div class="w-24 h-24 bg-stone-100 rounded-2xl flex items-center justify-center">
+              <i class="text-5xl" :class="fileIcon(binaryViewerFile.name)"></i>
+            </div>
+            <div class="text-center">
+              <p class="text-sm font-medium text-ink-800">{{ binaryViewerFile.name }}</p>
+              <p class="text-xs text-ink-400 mt-1">{{ formatSize(binaryViewerFile.size) }}</p>
+            </div>
+            <button @click="downloadFile(binaryViewerPath)" class="flex items-center gap-2 px-5 py-2.5 bg-ink-900 text-white text-sm font-medium rounded-full hover:bg-ink-800 transition-colors">
+              <i class="ph ph-download-simple"></i>
+              <span>下载文件</span>
+            </button>
           </div>
         </div>
       </Transition>
@@ -277,6 +318,15 @@ async function toggleFeature(page) {
   fetchPages()
 }
 
+async function togglePublic(page) {
+  if (page.is_public) {
+    await fetch(`${API}/api/pages/${page.id}/public`, { method: 'DELETE' })
+  } else {
+    await fetch(`${API}/api/pages/${page.id}/public`, { method: 'POST' })
+  }
+  fetchPages()
+}
+
 // ---- Preview Drawer ----
 const previewVisible = ref(false)
 const previewUrl = ref('')
@@ -318,6 +368,29 @@ const filesLoading = ref(false)
 const fileViewerVisible = ref(false)
 const fileViewerContent = ref('')
 const fileViewerPath = ref('')
+const copied = ref(false)
+const binaryViewerVisible = ref(false)
+const binaryViewerPath = ref('')
+const binaryViewerFile = ref({ name: '', size: 0 })
+
+const TEXT_EXTS = new Set([
+  'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'vue', 'json', 'css', 'scss', 'less',
+  'html', 'htm', 'xml', 'svg', 'md', 'txt', 'yaml', 'yml', 'toml', 'ini', 'cfg',
+  'conf', 'env', 'sh', 'bash', 'zsh', 'fish', 'bat', 'cmd', 'ps1', 'py', 'rb',
+  'go', 'java', 'kt', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'php', 'sql', 'graphql',
+  'dockerfile', 'makefile', 'gitignore', 'editorconfig', 'eslintrc', 'prettierrc',
+  'lock', 'log', 'csv', 'tsv'
+])
+
+function isTextFile(name) {
+  const lower = name.toLowerCase()
+  if (!lower.includes('.')) {
+    // Files without extension: check common names
+    return ['dockerfile', 'makefile', 'readme', 'license', 'changelog', '.gitignore', '.env'].includes(lower)
+  }
+  const ext = lower.split('.').pop()
+  return TEXT_EXTS.has(ext)
+}
 
 const breadcrumbs = computed(() => {
   const parts = currentPath.value.split('/').filter(Boolean)
@@ -349,18 +422,43 @@ function navigateTo(path) {
 }
 
 async function viewFile(path, f) {
-  if (f.size > 512 * 1024) return alert('文件过大，不支持预览')
+  if (isTextFile(f.name)) {
+    if (f.size > 512 * 1024) return alert('文件过大，不支持预览')
+    try {
+      const r = await fetch(`${API}/api/app/files/content?path=${encodeURIComponent(path)}`)
+      const d = await r.json()
+      if (d.success) {
+        fileViewerContent.value = d.data.content
+        fileViewerPath.value = path
+        copied.value = false
+        fileViewerVisible.value = true
+      } else {
+        alert(d.error || '读取失败')
+      }
+    } catch { alert('读取失败') }
+  } else {
+    binaryViewerFile.value = f
+    binaryViewerPath.value = path
+    binaryViewerVisible.value = true
+  }
+}
+
+function downloadFile(path) {
+  const url = `${API}/api/app/files/download?path=${encodeURIComponent(path)}`
+  const a = document.createElement('a')
+  a.href = url
+  a.download = path.split('/').pop()
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
+async function copyFileContent() {
   try {
-    const r = await fetch(`${API}/api/app/files/content?path=${encodeURIComponent(path)}`)
-    const d = await r.json()
-    if (d.success) {
-      fileViewerContent.value = d.data.content
-      fileViewerPath.value = path
-      fileViewerVisible.value = true
-    } else {
-      alert(d.error || '读取失败')
-    }
-  } catch { alert('读取失败') }
+    await navigator.clipboard.writeText(fileViewerContent.value)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  } catch { alert('复制失败') }
 }
 
 async function uploadFile(e) {
