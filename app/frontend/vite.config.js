@@ -75,20 +75,18 @@ export default defineConfig({
     port: 5174,
     host: '0.0.0.0',
     proxy: {
-      '/api/auth': {
-        target: 'http://localhost:3001',
-        changeOrigin: true
-      },
-      '/api/app': {
-        target: 'http://localhost:3001',
-        changeOrigin: true
-      },
+      // 控制后端专用路由
       '/api/heartbeat': {
         target: controlBackend,
         changeOrigin: true
       },
       '/api/pages': {
         target: controlBackend,
+        changeOrigin: true
+      },
+      // 其他所有 /api/ 请求统一转发到 app 后端
+      '/api': {
+        target: 'http://localhost:3001',
         changeOrigin: true
       }
     },
