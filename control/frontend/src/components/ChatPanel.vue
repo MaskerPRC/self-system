@@ -73,8 +73,8 @@
             <!-- File attachments -->
             <div v-if="m.attachments && m.attachments.length" class="mt-3 space-y-3">
               <template v-for="(att, i) in m.attachments" :key="i">
-                <!-- Image preview -->
-                <div v-if="isImage(att)" class="group relative inline-block">
+                <!-- Image preview (skip if too large) -->
+                <div v-if="isImage(att) && canPreview(att)" class="group relative inline-block">
                   <img
                     :src="previewUrl(att)"
                     :alt="att.name"
@@ -91,8 +91,8 @@
                   <div class="text-xs text-ink-400 mt-1">{{ att.name }} ({{ formatSize(att.size) }})</div>
                 </div>
 
-                <!-- Video player -->
-                <div v-else-if="isVideo(att)" class="max-w-xs sm:max-w-md">
+                <!-- Video player (skip if too large) -->
+                <div v-else-if="isVideo(att) && canPreview(att)" class="max-w-xs sm:max-w-md">
                   <video :src="previewUrl(att)" controls preload="metadata"
                     class="w-full rounded-xl border border-stone-200 shadow-sm"></video>
                   <div class="flex items-center justify-between mt-1">
@@ -104,8 +104,8 @@
                   </div>
                 </div>
 
-                <!-- Audio player -->
-                <div v-else-if="isAudio(att)" class="max-w-xs sm:max-w-md">
+                <!-- Audio player (skip if too large) -->
+                <div v-else-if="isAudio(att) && canPreview(att)" class="max-w-xs sm:max-w-md">
                   <div class="flex items-center gap-3 bg-stone-50 rounded-xl px-4 py-3 border border-stone-200">
                     <i class="ph-duotone ph-music-note text-2xl text-brand-500 shrink-0"></i>
                     <div class="flex-1 min-w-0">
@@ -120,7 +120,7 @@
                   </div>
                 </div>
 
-                <!-- Generic file card -->
+                <!-- Generic file card (fallback for all other files + oversized media) -->
                 <div v-else class="flex items-center gap-3 bg-stone-50 rounded-xl px-4 py-3 border border-stone-200 max-w-xs">
                   <i :class="attIcon(att)" class="text-2xl shrink-0"></i>
                   <div class="flex-1 min-w-0">
@@ -305,6 +305,11 @@ function isVideo(att) {
 
 function isAudio(att) {
   return att.type?.startsWith('audio/')
+}
+
+// 只有媒体文件（图片/视频/音频）支持 inline 预览
+function canPreview(att) {
+  return isImage(att) || isVideo(att) || isAudio(att)
 }
 
 function previewUrl(att) {
