@@ -106,6 +106,7 @@
           ref="inputRef"
           v-model="text"
           @keydown.enter.exact.prevent="send"
+          @paste="onPaste"
           :disabled="isProcessing"
           rows="1"
           class="w-full bg-transparent border-0 outline-none resize-none py-4 pl-14 pr-14 text-ink-900 placeholder-ink-400 max-h-[160px] disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
@@ -178,6 +179,30 @@ function onDrop(e) {
   const files = Array.from(e.dataTransfer?.files || [])
   const remaining = 10 - pendingFiles.value.length
   pendingFiles.value.push(...files.slice(0, remaining))
+}
+
+function onPaste(e) {
+  const items = e.clipboardData?.items
+  if (!items) return
+  const files = []
+  for (const item of items) {
+    if (item.kind === 'file') {
+      const blob = item.getAsFile()
+      if (!blob) continue
+      // 如果有原始文件名就保留，否则生成 UUID 名称
+      let name = blob.name
+      if (!name || name === 'image.png' || name === 'blob') {
+        const ext = (item.type.split('/')[1] || 'bin').replace(/[^a-z0-9]/g, '')
+        name = `${crypto.randomUUID()}.${ext}`
+      }
+      files.push(new File([blob], name, { type: item.type }))
+    }
+  }
+  if (files.length) {
+    e.preventDefault()
+    const remaining = 10 - pendingFiles.value.length
+    pendingFiles.value.push(...files.slice(0, remaining))
+  }
 }
 
 function removeFile(index) {
