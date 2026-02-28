@@ -371,12 +371,14 @@ app.post('/api/conversations/:id/upload', (req, res) => {
 
       const uploaded = [];
       for (const file of req.files) {
-        const safeName = file.originalname.replace(/[/\\:*?"<>|]/g, '_');
+        // multer 使用 latin1 解码 Content-Disposition 中的文件名，需要转回 UTF-8
+        const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+        const safeName = originalName.replace(/[/\\:*?"<>|]/g, '_');
         const finalName = `${Date.now()}-${safeName}`;
         await fsWriteFile(pathResolve(tempDir, finalName), file.buffer);
 
         uploaded.push({
-          name: file.originalname,
+          name: originalName,
           path: `app/temp/${conversationId}/${finalName}`,
           size: file.size,
           type: file.mimetype
