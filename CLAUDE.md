@@ -155,4 +155,5 @@ Claude Code 在处理需求时使用以下标记输出结构化信息：
 
 - `[PAGE_INFO] route: /xxx title: 页面标题 [/PAGE_INFO]` - 新建/修改页面时输出
 - `[SKILL_INFO] name: xxx description: xxx content: xxx [/SKILL_INFO]` - 创建 Skill 时输出
+- `[FILE_INFO] path: xxx name: xxx type: xxx size: xxx [/FILE_INFO]` - 生成文件时输出（可多个，与其他标记共存）
 - `[RESPONSE] 回复内容 [/RESPONSE]` - 纯文本回复（不涉及代码修改）时输出

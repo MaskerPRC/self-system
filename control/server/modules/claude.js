@@ -234,9 +234,24 @@ description: <一句话描述 skill 的用途>
 content: <skill 的完整 Markdown 内容，包含使用说明、API 端点、认证方式、示例代码等>
 [/SKILL_INFO]
 
+类型四：生成文件并分享给用户
+如果用户要求你生成文件（图片、文档、数据文件、音频、视频等），或者处理过程中产生了需要分享给用户的文件：
+1. 将文件保存到 app/temp/${conversationId}/ 目录下（先用 mkdir -p 确保目录存在）
+2. 文件名使用时间戳前缀避免冲突，例如: ${Date.now()}-filename.png
+3. 保存完成后，为每个文件输出一个标记：
+[FILE_INFO] path: app/temp/${conversationId}/<文件名> name: <显示名称> type: <MIME类型> size: <文件大小字节数> [/FILE_INFO]
+4. 同时可以输出 [RESPONSE] 来附带文字说明
+5. size 必须是准确的文件大小（字节数），可以用 fs 模块的 statSync 获取
+
+注意：
+- 文件必须实际存在于指定路径
+- 可以同时生成多个文件，每个文件一个 [FILE_INFO] 标记
+- [FILE_INFO] 可以与 [RESPONSE]、[PAGE_INFO] 等标记同时出现
+
 【重要规则】
-- 每次必须且只需输出一种标记（[RESPONSE]、[PAGE_INFO]、[SKILL_INFO]）
+- 每次输出对应的标记（[RESPONSE]、[PAGE_INFO]、[SKILL_INFO]、[FILE_INFO]）
 - 简单问题绝对不要创建页面或文件，直接用 [RESPONSE] 回答
+- [FILE_INFO] 可以与其他任何标记同时出现（例如生成文件同时回复文字）
 - 如果既创建了页面又创建了 skill，可以同时输出 [PAGE_INFO] 和 [SKILL_INFO]
 `;
 

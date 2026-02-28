@@ -45,11 +45,13 @@
           <div class="max-w-[85%] sm:max-w-[70%] bg-surface border border-stone-200 text-ink-900 px-6 py-4 rounded-3xl rounded-tr-md shadow-sm">
             <!-- Attachments -->
             <div v-if="m.attachments && m.attachments.length" class="flex flex-wrap gap-2 mb-2">
-              <div v-for="(att, i) in m.attachments" :key="i"
-                class="flex items-center gap-1.5 bg-stone-100 rounded-lg px-2.5 py-1.5 text-xs text-ink-600">
+              <a v-for="(att, i) in m.attachments" :key="i"
+                :href="downloadUrl(att)" :download="att.name"
+                class="flex items-center gap-1.5 bg-stone-100 hover:bg-stone-200 rounded-lg px-2.5 py-1.5 text-xs text-ink-600 transition-colors cursor-pointer">
                 <i :class="attIcon(att)" class="text-sm"></i>
                 <span class="max-w-[150px] truncate">{{ att.name }}</span>
-              </div>
+                <i class="ph ph-download-simple text-xs text-ink-300"></i>
+              </a>
             </div>
             <!-- Text content -->
             <div v-if="m.content" class="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
@@ -63,10 +65,74 @@
           <div class="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 shrink-0 border border-brand-100 mt-1">
             <i class="ph-fill ph-sparkle"></i>
           </div>
-          <div class="flex flex-col">
+          <div class="flex flex-col min-w-0">
             <span class="text-sm font-serif font-semibold text-ink-900 mb-1">Claude</span>
-            <div class="text-ink-800 text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+            <div v-if="m.content" class="text-ink-800 text-[15px] leading-relaxed whitespace-pre-wrap break-words">
               {{ m.content }}
+            </div>
+            <!-- File attachments -->
+            <div v-if="m.attachments && m.attachments.length" class="mt-3 space-y-3">
+              <template v-for="(att, i) in m.attachments" :key="i">
+                <!-- Image preview -->
+                <div v-if="isImage(att)" class="group relative inline-block">
+                  <img
+                    :src="previewUrl(att)"
+                    :alt="att.name"
+                    class="max-w-xs sm:max-w-sm rounded-xl border border-stone-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                    @click="openFullImage(att)"
+                    loading="lazy"
+                  />
+                  <div class="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <a :href="downloadUrl(att)" :download="att.name"
+                       class="w-8 h-8 flex items-center justify-center bg-paper/90 rounded-full shadow-sm hover:bg-paper text-ink-600">
+                      <i class="ph ph-download-simple text-sm"></i>
+                    </a>
+                  </div>
+                  <div class="text-xs text-ink-400 mt-1">{{ att.name }} ({{ formatSize(att.size) }})</div>
+                </div>
+
+                <!-- Video player -->
+                <div v-else-if="isVideo(att)" class="max-w-xs sm:max-w-md">
+                  <video :src="previewUrl(att)" controls preload="metadata"
+                    class="w-full rounded-xl border border-stone-200 shadow-sm"></video>
+                  <div class="flex items-center justify-between mt-1">
+                    <span class="text-xs text-ink-400">{{ att.name }} ({{ formatSize(att.size) }})</span>
+                    <a :href="downloadUrl(att)" :download="att.name"
+                       class="text-xs text-brand-500 hover:text-brand-600 flex items-center gap-1">
+                      <i class="ph ph-download-simple"></i> 下载
+                    </a>
+                  </div>
+                </div>
+
+                <!-- Audio player -->
+                <div v-else-if="isAudio(att)" class="max-w-xs sm:max-w-md">
+                  <div class="flex items-center gap-3 bg-stone-50 rounded-xl px-4 py-3 border border-stone-200">
+                    <i class="ph-duotone ph-music-note text-2xl text-brand-500 shrink-0"></i>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-sm text-ink-800 truncate">{{ att.name }}</div>
+                      <div class="text-xs text-ink-400">{{ formatSize(att.size) }}</div>
+                      <audio :src="previewUrl(att)" controls preload="metadata" class="w-full mt-2 h-8"></audio>
+                    </div>
+                    <a :href="downloadUrl(att)" :download="att.name"
+                       class="w-8 h-8 flex items-center justify-center text-ink-400 hover:text-brand-500 rounded-full hover:bg-stone-100 shrink-0">
+                      <i class="ph ph-download-simple"></i>
+                    </a>
+                  </div>
+                </div>
+
+                <!-- Generic file card -->
+                <div v-else class="flex items-center gap-3 bg-stone-50 rounded-xl px-4 py-3 border border-stone-200 max-w-xs">
+                  <i :class="attIcon(att)" class="text-2xl shrink-0"></i>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm text-ink-800 truncate">{{ att.name }}</div>
+                    <div class="text-xs text-ink-400">{{ formatSize(att.size) }}</div>
+                  </div>
+                  <a :href="downloadUrl(att)" :download="att.name"
+                     class="w-8 h-8 flex items-center justify-center text-ink-400 hover:text-brand-500 rounded-full hover:bg-stone-100 shrink-0">
+                    <i class="ph ph-download-simple"></i>
+                  </a>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -220,9 +286,49 @@ function fileIcon(file) {
 }
 
 function attIcon(att) {
-  if (att.type?.startsWith('image/')) return 'ph ph-image text-blue-500'
-  if (att.type?.includes('pdf')) return 'ph ph-file-pdf text-red-500'
-  return 'ph ph-file text-ink-400'
+  if (att.type?.startsWith('image/')) return 'ph-duotone ph-image text-blue-500'
+  if (att.type?.startsWith('video/')) return 'ph-duotone ph-video-camera text-purple-500'
+  if (att.type?.startsWith('audio/')) return 'ph-duotone ph-music-note text-green-500'
+  if (att.type?.includes('pdf')) return 'ph-duotone ph-file-pdf text-red-500'
+  if (att.type?.includes('zip') || att.type?.includes('rar') || att.type?.includes('tar')) return 'ph-duotone ph-file-zip text-yellow-600'
+  if (att.type?.includes('text') || att.type?.includes('json') || att.type?.includes('javascript')) return 'ph-duotone ph-file-text text-ink-500'
+  return 'ph-duotone ph-file text-ink-400'
+}
+
+function isImage(att) {
+  return att.type?.startsWith('image/')
+}
+
+function isVideo(att) {
+  return att.type?.startsWith('video/')
+}
+
+function isAudio(att) {
+  return att.type?.startsWith('audio/')
+}
+
+function previewUrl(att) {
+  const parts = att.path?.split('/')
+  if (parts?.length >= 4 && parts[0] === 'app' && parts[1] === 'temp') {
+    const convId = parts[2]
+    const fileName = parts.slice(3).join('/')
+    return `/api/conversations/${convId}/files/preview?name=${encodeURIComponent(fileName)}`
+  }
+  return ''
+}
+
+function downloadUrl(att) {
+  const parts = att.path?.split('/')
+  if (parts?.length >= 4 && parts[0] === 'app' && parts[1] === 'temp') {
+    const convId = parts[2]
+    const fileName = parts.slice(3).join('/')
+    return `/api/conversations/${convId}/files/download?name=${encodeURIComponent(fileName)}`
+  }
+  return ''
+}
+
+function openFullImage(att) {
+  window.open(previewUrl(att), '_blank')
 }
 
 function formatSize(bytes) {
