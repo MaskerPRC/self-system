@@ -3,6 +3,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { resolve as pathResolve, dirname } from 'path';
 import { readFileSync, existsSync } from 'fs';
+import { writeFile as fsWriteFile, mkdir as fsMkdir, rm as fsRm } from 'fs/promises';
 import { exec } from 'child_process';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
@@ -136,6 +137,11 @@ app.delete('/api/conversations/:id', async (req, res) => {
       .delete()
       .eq('id', req.params.id);
     if (error) throw error;
+
+    // 清理该对话的临时文件
+    const tempDir = pathResolve(__dirname, '../../app/temp', req.params.id);
+    try { await fsRm(tempDir, { recursive: true, force: true }); } catch {}
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -161,10 +167,11 @@ app.get('/api/conversations/:id/messages', async (req, res) => {
 
 // 发送消息（核心：触发 Claude Code 修改应用项目）
 app.post('/api/conversations/:id/messages', async (req, res) => {
-  const { content } = req.body;
+  const { content, attachments } = req.body;
   const conversationId = req.params.id;
 
-  if (!content || !content.trim()) {
+  const hasAttachments = attachments && attachments.length > 0;
+  if ((!content || !content.trim()) && !hasAttachments) {
     return res.status(400).json({ success: false, error: '消息不能为空' });
   }
 
@@ -172,9 +179,12 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
     const supabase = getSupabase();
 
     // 保存用户消息
+    const msgContent = content ? content.trim() : '';
+    const insertData = { conversation_id: conversationId, role: 'user', content: msgContent };
+    if (hasAttachments) insertData.attachments = attachments;
     const { data: userMsg, error: userError } = await supabase
       .from('messages')
-      .insert({ conversation_id: conversationId, role: 'user', content: content.trim() })
+      .insert(insertData)
       .select()
       .single();
     if (userError) throw userError;
@@ -210,7 +220,8 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
 
         // 首条消息时自动生成对话标题
         if (history.length === 0) {
-          const autoTitle = content.trim().slice(0, 30) + (content.trim().length > 30 ? '...' : '');
+          const titleSource = msgContent || (hasAttachments ? `上传了 ${attachments.length} 个文件` : '新对话');
+          const autoTitle = titleSource.slice(0, 30) + (titleSource.length > 30 ? '...' : '');
           try {
             await supabase
               .from('conversations')
@@ -220,7 +231,7 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
           } catch {}
         }
 
-        const result = await callClaudeCode(content.trim(), conversationId, history);
+        const result = await callClaudeCode(msgContent || '请查看我上传的文件', conversationId, history, attachments);
 
         // 1. 检查是否为简单回复 [RESPONSE]
         const responseText = extractResponse(result.stdout);
@@ -292,6 +303,51 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// ==================== 聊天文件上传 API ====================
+
+const chatUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }
+}).array('files', 10);
+
+app.post('/api/conversations/:id/upload', (req, res) => {
+  chatUpload(req, res, async (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ success: false, error: '文件大小超过 20MB 限制' });
+      return res.status(400).json({ success: false, error: err.message });
+    }
+
+    const conversationId = req.params.id;
+    if (!req.files || !req.files.length) {
+      return res.status(400).json({ success: false, error: '未选择文件' });
+    }
+
+    try {
+      const projectRoot = pathResolve(__dirname, '../..');
+      const tempDir = pathResolve(projectRoot, 'app', 'temp', conversationId);
+      await fsMkdir(tempDir, { recursive: true });
+
+      const uploaded = [];
+      for (const file of req.files) {
+        const safeName = file.originalname.replace(/[/\\:*?"<>|]/g, '_');
+        const finalName = `${Date.now()}-${safeName}`;
+        await fsWriteFile(pathResolve(tempDir, finalName), file.buffer);
+
+        uploaded.push({
+          name: file.originalname,
+          path: `app/temp/${conversationId}/${finalName}`,
+          size: file.size,
+          type: file.mimetype
+        });
+      }
+
+      res.json({ success: true, data: uploaded });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
 });
 
 // ==================== 页面 API ====================

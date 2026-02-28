@@ -130,7 +130,7 @@ export async function initGitRepo() {
       console.log('[Git] Initializing new git repository...');
 
       const gitignore = [
-        'node_modules/', '.pnpm-store/', '.vite/', 'dist/', '*.log', '.DS_Store', 'pnpm-lock.yaml'
+        'node_modules/', '.pnpm-store/', '.vite/', 'dist/', '*.log', '.DS_Store', 'pnpm-lock.yaml', 'temp/'
       ].join('\n') + '\n';
       await writeFile(resolve(APP_DIR, '.gitignore'), gitignore, 'utf8');
 

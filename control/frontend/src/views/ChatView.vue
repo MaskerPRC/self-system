@@ -103,15 +103,43 @@ async function renameConv(id, title) {
   } catch {}
 }
 
-async function sendMessage(content) {
-  if (!activeId.value || !content.trim()) return
+async function sendMessage(payload) {
+  const { content, files } = payload
+  if (!activeId.value) return
+  if (!content?.trim() && (!files || !files.length)) return
+
+  let uploadedAttachments = []
+
+  // 先上传文件
+  if (files && files.length > 0) {
+    const formData = new FormData()
+    for (const f of files) formData.append('files', f)
+    try {
+      const uploadRes = await fetch(`${API}/api/conversations/${activeId.value}/upload`, {
+        method: 'POST', body: formData
+      })
+      const uploadData = await uploadRes.json()
+      if (uploadData.success) uploadedAttachments = uploadData.data
+    } catch (e) {
+      console.error('File upload failed:', e)
+    }
+  }
+
+  // 本地乐观消息
   messages.value.push({
     id: 'tmp-' + Date.now(), conversation_id: activeId.value,
-    role: 'user', content: content.trim(), created_at: new Date().toISOString()
+    role: 'user', content: content?.trim() || '',
+    attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
+    created_at: new Date().toISOString()
   })
+
+  // 发送消息
   await fetch(`${API}/api/conversations/${activeId.value}/messages`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: content.trim() })
+    body: JSON.stringify({
+      content: content?.trim() || '',
+      attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined
+    })
   })
 }
 

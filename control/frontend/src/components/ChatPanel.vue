@@ -42,8 +42,19 @@
 
         <!-- User message -->
         <div v-else-if="m.role === 'user'" class="flex justify-end animate-fade-in-up">
-          <div class="max-w-[85%] sm:max-w-[70%] bg-surface border border-stone-200 text-ink-900 px-6 py-4 rounded-3xl rounded-tr-md shadow-sm text-[15px] leading-relaxed whitespace-pre-wrap break-words">
-            {{ m.content }}
+          <div class="max-w-[85%] sm:max-w-[70%] bg-surface border border-stone-200 text-ink-900 px-6 py-4 rounded-3xl rounded-tr-md shadow-sm">
+            <!-- Attachments -->
+            <div v-if="m.attachments && m.attachments.length" class="flex flex-wrap gap-2 mb-2">
+              <div v-for="(att, i) in m.attachments" :key="i"
+                class="flex items-center gap-1.5 bg-stone-100 rounded-lg px-2.5 py-1.5 text-xs text-ink-600">
+                <i :class="attIcon(att)" class="text-sm"></i>
+                <span class="max-w-[150px] truncate">{{ att.name }}</span>
+              </div>
+            </div>
+            <!-- Text content -->
+            <div v-if="m.content" class="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+              {{ m.content }}
+            </div>
           </div>
         </div>
 
@@ -64,18 +75,51 @@
 
     <!-- Floating Input Area -->
     <div class="absolute bottom-24 left-0 right-0 px-4 sm:px-10 flex justify-center pointer-events-none">
-      <div v-if="conversationId" class="w-full max-w-3xl relative bg-paper rounded-3xl border border-stone-200 shadow-float focus-within:border-stone-300 focus-within:shadow-xl transition-all duration-300 pointer-events-auto">
+      <div v-if="conversationId"
+        class="w-full max-w-3xl relative bg-paper rounded-3xl border border-stone-200 shadow-float focus-within:border-stone-300 focus-within:shadow-xl transition-all duration-300 pointer-events-auto"
+        @dragover.prevent="isDragging = true"
+        @dragleave.prevent="isDragging = false"
+        @drop.prevent="onDrop">
+
+        <!-- Drag overlay -->
+        <div v-if="isDragging" class="absolute inset-0 rounded-3xl bg-brand-50/80 border-2 border-dashed border-brand-300 z-10 flex items-center justify-center">
+          <span class="text-brand-600 text-sm font-medium">释放以添加文件</span>
+        </div>
+
+        <!-- Pending files preview -->
+        <div v-if="pendingFiles.length" class="flex flex-wrap gap-2 px-5 pt-3 pb-1">
+          <div v-for="(f, i) in pendingFiles" :key="i"
+            class="flex items-center gap-1.5 bg-stone-100 rounded-xl px-3 py-1.5 text-xs text-ink-700">
+            <i :class="fileIcon(f)" class="text-sm text-ink-400"></i>
+            <span class="max-w-[120px] truncate">{{ f.name }}</span>
+            <span class="text-ink-400">({{ formatSize(f.size) }})</span>
+            <button @click="removeFile(i)" class="text-ink-300 hover:text-red-500 transition-colors ml-0.5">
+              <i class="ph ph-x text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Hidden file input -->
+        <input ref="fileInputRef" type="file" multiple class="hidden" @change="onFilesSelected" />
+
         <textarea
           ref="inputRef"
           v-model="text"
           @keydown.enter.exact.prevent="send"
           :disabled="isProcessing"
           rows="1"
-          class="w-full bg-transparent border-0 outline-none resize-none py-4 pl-6 pr-14 text-ink-900 placeholder-ink-400 max-h-[160px] disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
+          class="w-full bg-transparent border-0 outline-none resize-none py-4 pl-14 pr-14 text-ink-900 placeholder-ink-400 max-h-[160px] disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
           placeholder="输入需求..."
         ></textarea>
 
-        <button @click="send" :disabled="!text.trim() || isProcessing"
+        <!-- Attach button -->
+        <button @click="fileInputRef?.click()" :disabled="isProcessing"
+          class="absolute left-2 bottom-2 w-10 h-10 flex items-center justify-center text-ink-400 hover:text-brand-500 rounded-full hover:bg-stone-100 disabled:opacity-50 transition-colors">
+          <i class="ph ph-paperclip text-lg"></i>
+        </button>
+
+        <!-- Send button -->
+        <button @click="send" :disabled="(!text.trim() && !pendingFiles.length) || isProcessing"
           class="absolute right-2 bottom-2 w-10 h-10 flex items-center justify-center bg-brand-500 text-white rounded-full hover:bg-brand-600 disabled:bg-stone-100 disabled:text-stone-400 transition-colors">
           <i class="ph-bold ph-arrow-up text-lg"></i>
         </button>
@@ -109,12 +153,54 @@ const emit = defineEmits(['send', 'toggle-sidebar'])
 const text = ref('')
 const msgsRef = ref(null)
 const inputRef = ref(null)
+const fileInputRef = ref(null)
+const pendingFiles = ref([])
+const isDragging = ref(false)
 
 function send() {
-  if (!text.value.trim() || props.isProcessing) return
-  emit('send', text.value)
+  if (props.isProcessing) return
+  if (!text.value.trim() && !pendingFiles.value.length) return
+  emit('send', { content: text.value, files: [...pendingFiles.value] })
   text.value = ''
+  pendingFiles.value = []
   if (inputRef.value) inputRef.value.style.height = 'auto'
+}
+
+function onFilesSelected(e) {
+  const files = Array.from(e.target.files || [])
+  const remaining = 10 - pendingFiles.value.length
+  pendingFiles.value.push(...files.slice(0, remaining))
+  if (fileInputRef.value) fileInputRef.value.value = ''
+}
+
+function onDrop(e) {
+  isDragging.value = false
+  const files = Array.from(e.dataTransfer?.files || [])
+  const remaining = 10 - pendingFiles.value.length
+  pendingFiles.value.push(...files.slice(0, remaining))
+}
+
+function removeFile(index) {
+  pendingFiles.value.splice(index, 1)
+}
+
+function fileIcon(file) {
+  if (file.type?.startsWith('image/')) return 'ph ph-image'
+  if (file.type?.includes('pdf')) return 'ph ph-file-pdf'
+  if (file.type?.includes('text') || file.type?.includes('json') || file.type?.includes('javascript')) return 'ph ph-file-text'
+  return 'ph ph-file'
+}
+
+function attIcon(att) {
+  if (att.type?.startsWith('image/')) return 'ph ph-image text-blue-500'
+  if (att.type?.includes('pdf')) return 'ph ph-file-pdf text-red-500'
+  return 'ph ph-file text-ink-400'
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + 'B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + 'MB'
 }
 
 watch(() => props.messages?.length, () => {

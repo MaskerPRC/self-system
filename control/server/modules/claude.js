@@ -119,7 +119,7 @@ function runClaude(prompt, projectRoot, conversationId) {
 /**
  * 调用 Claude Code 处理用户需求
  */
-export async function callClaudeCode(requirement, conversationId, history = []) {
+export async function callClaudeCode(requirement, conversationId, history = [], attachments = []) {
   const isInstalled = await checkClaudeCode();
   if (!isInstalled) throw new Error('Claude Code CLI 未安装或不可用');
 
@@ -145,6 +145,16 @@ export async function callClaudeCode(requirement, conversationId, history = []) 
     historySection = `\n【对话历史】\n${historyLines.join('\n')}\n`;
   }
 
+  // 构建文件附件上下文
+  let attachmentsSection = '';
+  if (attachments && attachments.length > 0) {
+    const fileList = attachments.map(f => `- ${f.path} (${f.name}, ${f.type}, ${f.size} bytes)`).join('\n');
+    attachmentsSection = `\n【用户上传的文件】
+以下文件已上传到项目目录中，你可以使用 Read 工具直接查看这些文件：
+${fileList}
+`;
+  }
+
   const prompt = `你是一个"数字渐进式分身"平台的 AI 助手。根据用户需求，你需要判断该如何处理。
 
 【项目结构说明】
@@ -152,7 +162,7 @@ export async function callClaudeCode(requirement, conversationId, history = []) 
 - app/frontend/ : Vue 3 前端应用（端口 5174），承载多个交互页面
 - app/server/   : Node.js + Express 后端（端口 3001），为交互页面提供 API
 - .claude/skills/ : Skills 目录，存放已安装的技能配置
-${skillsSection}${historySection}
+${skillsSection}${historySection}${attachmentsSection}
 【当前用户消息】
 ${requirement}
 
