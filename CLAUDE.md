@@ -77,6 +77,22 @@ app/frontend/src/views/
 
 控制系统的后端模块已经在 `control/server/modules/` 目录中做了较好的拆分，新增功能时也应遵循同样的模块化原则。
 
+## PWA 支持规范（重要）
+
+App 应用项目已配置 PWA（Progressive Web App）支持，方便用户将应用保存到桌面/主屏幕作为独立应用使用。
+
+### 已有配置
+- `vite-plugin-pwa` 已安装并在 `vite.config.js` 中配置
+- Service Worker 自动注册（`registerType: 'autoUpdate'`）
+- Web App Manifest 已配置（应用名、图标、主题色等）
+- 离线缓存策略：静态资源 CacheFirst，API 请求 NetworkFirst
+
+### 开发页面时的 PWA 要求
+- **所有新页面必须支持移动端适配**：使用响应式布局，确保在手机屏幕上正常显示
+- **页面标题**：每个页面应通过 `document.title` 设置合适的页面标题
+- **离线友好**：页面应考虑网络异常情况，在 API 请求失败时给出友好提示而非白屏
+- **触摸友好**：按钮和交互元素应有足够的点击区域（最小 44x44px），适合手指操作
+
 ## Claude Code 输出格式
 
 Claude Code 在处理需求时使用以下标记输出结构化信息：
