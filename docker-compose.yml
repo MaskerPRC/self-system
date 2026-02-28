@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: digital-avatar-control
     ports:
-      - "42617:3000"   # 控制后端 (API + WebSocket + 静态前端)
+      - "${CONTROL_PORT:-42617}:3000"   # 控制后端 (API + WebSocket + 静态前端)
     volumes:
       # 共享应用代码 volume（Claude Code 在此修改文件）
       - app-data:/app/app
@@ -26,7 +26,7 @@ services:
       # 应用容器名称（供 process.js 使用）
       - APP_CONTAINER_NAME=digital-avatar-app
       # 应用前端外部访问地址（供控制面板 iframe/链接使用）
-      - APP_EXTERNAL_URL=${APP_EXTERNAL_URL:-http://localhost:53781}
+      - APP_EXTERNAL_URL=${APP_EXTERNAL_URL:-http://localhost:${APP_FRONTEND_PORT:-53781}}
       # Git 自动提交配置
       - GIT_USER_NAME=${GIT_USER_NAME:-Digital Avatar Bot}
       - GIT_USER_EMAIL=${GIT_USER_EMAIL:-bot@digital-avatar.local}
@@ -49,8 +49,8 @@ services:
       dockerfile: app/Dockerfile
     container_name: digital-avatar-app
     ports:
-      - "53783:3001"   # 应用后端
-      - "53781:5174"   # 应用前端
+      - "${APP_BACKEND_PORT:-53783}:3001"   # 应用后端
+      - "${APP_FRONTEND_PORT:-53781}:5174"   # 应用前端
     volumes:
       # 共享应用代码 volume（运行代码来自此处）
       - app-data:/app
