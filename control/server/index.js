@@ -7,9 +7,9 @@ import { writeFile as fsWriteFile, mkdir as fsMkdir, rm as fsRm } from 'fs/promi
 import { exec } from 'child_process';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
-import { setupWebSocket, broadcast, markProcessing, clearProcessing, markQueued, getProcessingList, getQueuedList, getClientCount } from './modules/websocket.js';
+import { setupWebSocket, broadcast, markProcessing, clearProcessing, markQueued, clearQueued, getProcessingList, getQueuedList, getClientCount } from './modules/websocket.js';
 import { getSupabase } from './modules/supabase.js';
-import { callClaudeCode, verifyAndFixApp } from './modules/claude.js';
+import { callClaudeCode, verifyAndFixApp, abortClaude } from './modules/claude.js';
 import { startAppProject, stopAppProject, restartAppProject, getAppStatus, getAppLogs, getAppLogsSince, getControlLogs, getControlLogsSince } from './modules/process.js';
 import { registerHeartbeat, getAllPages, getActivePages, startHeartbeatChecker } from './modules/heartbeat.js';
 import { getSkills, getSkill, createSkill, updateSkill, deleteSkill } from './modules/skills.js';
@@ -24,6 +24,9 @@ const server = createServer(app);
 const PORT = 3000;
 
 const requestQueue = new PQueue({ concurrency: 1 });
+
+// 已被用户中断的对话 ID 集合（用于跳过队列中等待的任务）
+const abortedConversations = new Set();
 
 app.use(cors());
 app.use(express.json());
@@ -206,6 +209,13 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
 
     // 异步执行 Claude Code
     requestQueue.add(async () => {
+      // 检查是否已被用户中断
+      if (abortedConversations.has(conversationId)) {
+        abortedConversations.delete(conversationId);
+        clearQueued(conversationId);
+        return;
+      }
+
       try {
         markProcessing(conversationId);
         broadcast({ type: 'processing', conversationId, requestId, message: '正在处理需求...' });
@@ -509,10 +519,39 @@ app.get('/api/queue/status', (req, res) => {
     success: true,
     data: {
       processing: getProcessingList(),
+      queued: getQueuedList(),
       pending: requestQueue.size,
       running: requestQueue.pending
     }
   });
+});
+
+// 中断对话任务
+app.post('/api/conversations/:id/cancel', async (req, res) => {
+  const conversationId = req.params.id;
+
+  // 1. 尝试终止正在运行的 Claude 进程
+  const wasRunning = abortClaude(conversationId);
+
+  // 2. 标记为已中断（如果任务还在队列中，执行时会跳过）
+  abortedConversations.add(conversationId);
+
+  // 3. 清理状态
+  clearProcessing(conversationId);
+  clearQueued(conversationId);
+
+  // 4. 写入中断消息
+  try {
+    const supabase = getSupabase();
+    await supabase
+      .from('messages')
+      .insert({ conversation_id: conversationId, role: 'system', content: '任务已被用户中断' });
+  } catch {}
+
+  // 5. 广播中断事件
+  broadcast({ type: 'cancelled', conversationId });
+
+  res.json({ success: true, wasRunning });
 });
 
 // ==================== Skills API ====================

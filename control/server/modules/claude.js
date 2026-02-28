@@ -12,6 +12,9 @@ let USE_SHELL = false;
 let CLAUDE_UID = null;
 let CLAUDE_GID = null;
 
+// 活跃的 Claude 子进程注册表 (conversationId -> ChildProcess)
+const activeProcesses = new Map();
+
 function initClaudeCmd() {
   try {
     const found = execSync('command -v claude', { encoding: 'utf-8', shell: '/bin/sh' }).trim();
@@ -86,8 +89,14 @@ function runClaude(prompt, projectRoot, conversationId) {
       claude = spawn(CLAUDE_CMD, claudeArgs, spawnOpts);
     }
 
+    // 注册进程，支持外部中断
+    if (conversationId) {
+      activeProcesses.set(conversationId, claude);
+    }
+
     let stdout = '';
     let stderr = '';
+    let aborted = false;
 
     claude.stdout.setEncoding('utf8');
     claude.stdout.on('data', (data) => {
@@ -105,14 +114,23 @@ function runClaude(prompt, projectRoot, conversationId) {
     });
 
     claude.on('close', (code) => {
+      activeProcesses.delete(conversationId);
+      if (aborted) {
+        reject(new Error('任务已被用户中断'));
+        return;
+      }
       console.log(`[Claude] 退出码: ${code}`);
       if (code === 0) res({ stdout, stderr });
       else reject(new Error(`Claude Code 失败 (exit ${code})\n${stderr}`));
     });
 
     claude.on('error', (error) => {
+      activeProcesses.delete(conversationId);
       reject(new Error(`启动 Claude Code 失败: ${error.message}`));
     });
+
+    // 暴露 abort 方法给外部调用
+    claude._markAborted = () => { aborted = true; };
   });
 }
 
@@ -257,4 +275,24 @@ summary: <一句话描述修复了什么>
 
   console.log(`\n========== Claude Code 修复开始 ==========`);
   return runClaude(prompt, projectRoot, conversationId);
+}
+
+/**
+ * 中断正在执行的 Claude Code 进程
+ * @returns {boolean} 是否成功中断（true=正在运行并已终止，false=没有找到运行中的进程）
+ */
+export function abortClaude(conversationId) {
+  const proc = activeProcesses.get(conversationId);
+  if (proc) {
+    console.log(`[Claude] 中断任务: ${conversationId}`);
+    proc._markAborted();
+    proc.kill('SIGTERM');
+    // 给一个宽限期，如果 SIGTERM 没杀死就 SIGKILL
+    setTimeout(() => {
+      try { proc.kill('SIGKILL'); } catch {}
+    }, 3000);
+    activeProcesses.delete(conversationId);
+    return true;
+  }
+  return false;
 }

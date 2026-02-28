@@ -134,6 +134,9 @@
             <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
             <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
           </div>
+          <button @click="emit('cancel')" class="ml-2 w-6 h-6 flex items-center justify-center text-ink-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors" title="中断任务">
+            <i class="ph-bold ph-stop text-xs"></i>
+          </button>
         </div>
       </div>
     </div>
@@ -149,7 +152,7 @@ const props = defineProps({
   isProcessing: Boolean,
   chatTitle: { type: String, default: '选择一个对话' }
 })
-const emit = defineEmits(['send', 'toggle-sidebar'])
+const emit = defineEmits(['send', 'toggle-sidebar', 'cancel'])
 
 const text = ref('')
 const msgsRef = ref(null)

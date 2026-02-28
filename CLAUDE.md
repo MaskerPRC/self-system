@@ -88,6 +88,51 @@ app/frontend/src/views/
 
 控制系统的后端模块已经在 `control/server/modules/` 目录中做了较好的拆分，新增功能时也应遵循同样的模块化原则。
 
+## 定时任务规范（重要）
+
+App 后端使用 `node --watch` 开发模式，文件变动会频繁重启进程。如果定时任务在启动时立即执行，每次重启都会浪费资源（特别是 LLM 调用）。
+
+### 必须遵守的规则
+
+1. **严禁**在模块顶层或导入时直接调用昂贵操作（如 LLM 调用、外部 API 请求等）
+2. 所有定时任务必须自带**启动冷却期**，防止频繁重启时重复执行
+3. 定时任务的代码必须写在路由文件内，遵循模块化规范
+
+### 标准写法
+
+```javascript
+// routes/my-task.js
+import express from 'express';
+const router = express.Router();
+
+// 定时任务：启动后延迟 60 秒再执行第一次，避免 node --watch 重启时浪费
+const STARTUP_DELAY = 60_000;
+const INTERVAL = 60 * 60 * 1000; // 每小时
+
+setTimeout(() => {
+  doTask(); // 冷却期后执行第一次
+  setInterval(doTask, INTERVAL);
+}, STARTUP_DELAY);
+
+async function doTask() {
+  // 任务逻辑
+}
+
+export default router;
+```
+
+### 禁止的写法
+
+```javascript
+// ❌ 禁止：启动时立即执行
+doExpensiveTask();
+setInterval(doExpensiveTask, 60000);
+
+// ❌ 禁止：没有冷却期的定时任务
+setInterval(callLLM, 3600000);
+callLLM(); // node --watch 每次重启都会调用
+```
+
 ## PWA 支持规范（重要）
 
 App 应用项目已配置 PWA（Progressive Web App）支持，方便用户将应用保存到桌面/主屏幕作为独立应用使用。

@@ -22,6 +22,7 @@
       :isProcessing="isProcessing"
       :chatTitle="currentTitle"
       @send="sendMessage"
+      @cancel="cancelTask"
       @toggle-sidebar="showSidebar = !showSidebar"
     />
   </div>
@@ -152,6 +153,15 @@ async function sendMessage(payload) {
   })
 }
 
+async function cancelTask() {
+  if (!activeId.value) return
+  try {
+    await fetch(`${API}/api/conversations/${activeId.value}/cancel`, { method: 'POST' })
+  } catch (e) {
+    console.error('Cancel failed:', e)
+  }
+}
+
 function connectWs() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
   const url = import.meta.env.DEV ? 'ws://localhost:3000' : `${protocol}//${location.host}`
@@ -213,6 +223,15 @@ function connectWs() {
         id: 'err-' + Date.now(), role: 'system',
         content: data.message || '出错', created_at: new Date().toISOString()
       })
+    } else if (data.type === 'cancelled') {
+      if (data.conversationId) {
+        processingList.value = processingList.value.filter(id => id !== data.conversationId)
+        queuedList.value = queuedList.value.filter(id => id !== data.conversationId)
+      }
+      if (data.conversationId === activeId.value) {
+        isProcessing.value = false
+        fetchMessages(activeId.value)
+      }
     } else if (data.type === 'title_updated') {
       const conv = conversations.value.find(c => c.id === data.conversationId)
       if (conv) conv.title = data.title
