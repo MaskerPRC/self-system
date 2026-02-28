@@ -6,6 +6,8 @@ const clients = new Set();
 
 // 当前正在处理的会话集合
 const processingConversations = new Set();
+// 当前排队等待处理的会话集合
+const queuedConversations = new Set();
 
 /**
  * 设置 WebSocket 服务
@@ -30,7 +32,8 @@ export function setupWebSocket(server) {
     ws.send(JSON.stringify({
       type: 'connected',
       message: '已连接到控制平台',
-      processing: [...processingConversations]
+      processing: [...processingConversations],
+      queued: [...queuedConversations]
     }));
 
     ws.on('close', () => {
@@ -60,9 +63,24 @@ export function broadcast(message) {
 }
 
 /**
+ * 标记会话进入队列
+ */
+export function markQueued(conversationId) {
+  queuedConversations.add(conversationId);
+}
+
+/**
+ * 标记会话离开队列
+ */
+export function clearQueued(conversationId) {
+  queuedConversations.delete(conversationId);
+}
+
+/**
  * 标记会话开始处理
  */
 export function markProcessing(conversationId) {
+  queuedConversations.delete(conversationId);
   processingConversations.add(conversationId);
 }
 
@@ -75,6 +93,10 @@ export function clearProcessing(conversationId) {
 
 export function getProcessingList() {
   return [...processingConversations];
+}
+
+export function getQueuedList() {
+  return [...queuedConversations];
 }
 
 export function getClientCount() {

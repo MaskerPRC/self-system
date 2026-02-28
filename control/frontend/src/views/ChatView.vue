@@ -8,6 +8,9 @@
       :conversations="conversations"
       :activeId="activeId"
       :open="showSidebar"
+      :processingIds="processingList"
+      :queuedIds="queuedList"
+      :unreadIds="[...unreadSet]"
       @select="onSelect"
       @create="createConv"
       @delete="deleteConv"
@@ -37,7 +40,9 @@ const messages = ref([])
 const isProcessing = ref(false)
 const showSidebar = ref(false)
 let ws = null
-let processingList = []
+const processingList = ref([])
+const queuedList = ref([])
+const unreadSet = ref(new Set())
 
 const currentTitle = computed(() => {
   if (!activeId.value) return '选择一个对话'
@@ -74,6 +79,10 @@ function onSelect(id) {
   activeId.value = id
   localStorage.setItem('activeConvId', id)
   showSidebar.value = false
+  // 清除未读标记
+  const s = new Set(unreadSet.value)
+  s.delete(id)
+  unreadSet.value = s
 }
 
 async function createConv() {
@@ -151,15 +160,24 @@ function connectWs() {
     const data = JSON.parse(e.data)
 
     if (data.type === 'connected') {
-      processingList = data.processing || []
+      processingList.value = data.processing || []
+      queuedList.value = data.queued || []
       if (activeId.value) {
-        isProcessing.value = processingList.includes(activeId.value)
+        isProcessing.value = processingList.value.includes(activeId.value)
       }
       return
     }
 
+    if (data.type === 'queued') {
+      if (data.conversationId) queuedList.value = [...new Set([...queuedList.value, data.conversationId])]
+      return
+    }
+
     if (data.type === 'processing') {
-      if (data.conversationId) processingList = [...new Set([...processingList, data.conversationId])]
+      if (data.conversationId) {
+        processingList.value = [...new Set([...processingList.value, data.conversationId])]
+        queuedList.value = queuedList.value.filter(id => id !== data.conversationId)
+      }
       if (data.conversationId && data.conversationId !== activeId.value) return
       isProcessing.value = true
       messages.value.push({
@@ -167,13 +185,28 @@ function connectWs() {
         content: data.message || '处理中...', created_at: new Date().toISOString()
       })
     } else if (data.type === 'completed') {
-      if (data.conversationId) processingList = processingList.filter(id => id !== data.conversationId)
-      if (data.conversationId && data.conversationId !== activeId.value) return
+      if (data.conversationId) {
+        processingList.value = processingList.value.filter(id => id !== data.conversationId)
+        // 非当前查看的对话完成时标记为未读
+        if (data.conversationId !== activeId.value) {
+          unreadSet.value = new Set([...unreadSet.value, data.conversationId])
+        }
+      }
+      if (data.conversationId && data.conversationId !== activeId.value) {
+        fetchConvs()
+        return
+      }
       isProcessing.value = false
       fetchMessages(activeId.value)
       fetchConvs()
     } else if (data.type === 'error') {
-      if (data.conversationId) processingList = processingList.filter(id => id !== data.conversationId)
+      if (data.conversationId) {
+        processingList.value = processingList.value.filter(id => id !== data.conversationId)
+        // 出错也标记为未读，让用户知道有更新
+        if (data.conversationId !== activeId.value) {
+          unreadSet.value = new Set([...unreadSet.value, data.conversationId])
+        }
+      }
       if (data.conversationId && data.conversationId !== activeId.value) return
       isProcessing.value = false
       messages.value.push({
@@ -190,7 +223,7 @@ function connectWs() {
 
 watch(activeId, (id) => {
   fetchMessages(id)
-  isProcessing.value = id ? processingList.includes(id) : false
+  isProcessing.value = id ? processingList.value.includes(id) : false
 })
 onMounted(() => { fetchConvs(); connectWs() })
 onUnmounted(() => { if (ws) ws.close() })

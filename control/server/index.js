@@ -7,7 +7,7 @@ import { writeFile as fsWriteFile, mkdir as fsMkdir, rm as fsRm } from 'fs/promi
 import { exec } from 'child_process';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
-import { setupWebSocket, broadcast, markProcessing, clearProcessing, getProcessingList, getClientCount } from './modules/websocket.js';
+import { setupWebSocket, broadcast, markProcessing, clearProcessing, markQueued, getProcessingList, getQueuedList, getClientCount } from './modules/websocket.js';
 import { getSupabase } from './modules/supabase.js';
 import { callClaudeCode, verifyAndFixApp } from './modules/claude.js';
 import { startAppProject, stopAppProject, restartAppProject, getAppStatus, getAppLogs, getAppLogsSince, getControlLogs, getControlLogsSince } from './modules/process.js';
@@ -197,6 +197,12 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
 
     const requestId = Date.now().toString();
     res.json({ success: true, data: userMsg, requestId });
+
+    // 广播排队状态（队列中有任务时标记为排队，否则直接进入处理）
+    if (requestQueue.size > 0 || requestQueue.pending > 0) {
+      markQueued(conversationId);
+      broadcast({ type: 'queued', conversationId, requestId });
+    }
 
     // 异步执行 Claude Code
     requestQueue.add(async () => {
