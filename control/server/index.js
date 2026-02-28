@@ -250,16 +250,35 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
         const skillInfo = await extractAndSaveSkill(result.stdout);
 
         if (pageInfo) {
-          await supabase
+          // 检查该路由是否已有页面记录
+          const { data: existingPage } = await supabase
             .from('interactive_pages')
-            .insert({
-              conversation_id: conversationId,
-              title: pageInfo.title,
-              description: pageInfo.description,
-              route_path: pageInfo.routePath,
-              status: 'active',
-              is_public: pageInfo.isPublic || false
-            });
+            .select('id')
+            .eq('route_path', pageInfo.routePath)
+            .maybeSingle();
+
+          if (existingPage) {
+            // 已有页面：更新属性（如 public 状态）
+            const updateData = { updated_at: new Date().toISOString() };
+            if (pageInfo.isPublic !== undefined) updateData.is_public = pageInfo.isPublic;
+            if (pageInfo.title) updateData.title = pageInfo.title;
+            await supabase
+              .from('interactive_pages')
+              .update(updateData)
+              .eq('id', existingPage.id);
+          } else {
+            // 新页面：插入记录
+            await supabase
+              .from('interactive_pages')
+              .insert({
+                conversation_id: conversationId,
+                title: pageInfo.title,
+                description: pageInfo.description,
+                route_path: pageInfo.routePath,
+                status: 'active',
+                is_public: pageInfo.isPublic || false
+              });
+          }
         }
 
         // 3. 如果创建/修改了页面，重启应用并验证
