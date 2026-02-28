@@ -947,17 +947,29 @@ function extractResponse(output) {
 
 /**
  * 从 Claude 输出中提取文件信息 [FILE_INFO]...[/FILE_INFO]
- * 支持多个文件标记
+ * 支持多个文件标记，兼容单行和多行格式
  */
 function extractFileInfo(output) {
   const files = [];
-  const regex = /\[FILE_INFO\]\s*path:\s*(\S+)\s+name:\s*(.+?)\s+type:\s*(\S+)\s+size:\s*(\d+)\s*\[\/FILE_INFO\]/g;
-  let match;
-  while ((match = regex.exec(output)) !== null) {
-    const filePath = match[1].trim();
-    const name = match[2].trim();
-    const type = match[3].trim();
-    const size = parseInt(match[4], 10);
+  // 先提取所有 [FILE_INFO]...[/FILE_INFO] 块
+  const blockRegex = /\[FILE_INFO\]([\s\S]*?)\[\/FILE_INFO\]/g;
+  let blockMatch;
+  while ((blockMatch = blockRegex.exec(output)) !== null) {
+    const block = blockMatch[1];
+    const pathMatch = block.match(/path:\s*(\S+)/);
+    const nameMatch = block.match(/name:\s*(.+?)(?:\s+type:|\s*$)/m);
+    const typeMatch = block.match(/type:\s*(\S+)/);
+    const sizeMatch = block.match(/size:\s*(\d+)/);
+
+    if (!pathMatch || !nameMatch || !typeMatch || !sizeMatch) {
+      console.warn(`[FileInfo] 标记格式不完整，跳过: ${block.trim().slice(0, 100)}`);
+      continue;
+    }
+
+    const filePath = pathMatch[1].trim();
+    const name = nameMatch[1].trim();
+    const type = typeMatch[1].trim();
+    const size = parseInt(sizeMatch[1], 10);
 
     // 安全校验：只允许 app/temp/ 下的文件
     if (!filePath.startsWith('app/temp/')) {
