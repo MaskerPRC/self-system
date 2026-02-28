@@ -17,8 +17,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - NODE_ENV=production
-      # Claude Code 配置（二选一：ZHIPU_API_KEY 优先）
+      # Claude Code 配置（优先级：ZHIPU > MINIMAX > 代理）
       - ZHIPU_API_KEY=${ZHIPU_API_KEY}
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
       - CLAUDE_CODE_URL=${CLAUDE_CODE_URL}
       - CLAUDE_CODE_KEY=${CLAUDE_CODE_KEY}
       - CLAUDE_MODEL=${CLAUDE_MODEL}

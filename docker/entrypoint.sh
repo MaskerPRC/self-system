@@ -47,6 +47,50 @@ if [ -n "$ZHIPU_API_KEY" ]; then
 
     echo "[配置] 智谱 GLM5 配置完成"
 
+elif [ -n "$MINIMAX_API_KEY" ]; then
+    # ===== MiniMax 模式 =====
+    echo "[配置] 检测到 MINIMAX_API_KEY，使用 MiniMax 模式"
+
+    ANTHROPIC_BASE_URL="https://api.minimaxi.com/anthropic"
+    API_TIMEOUT_MS="3000000"
+    MINIMAX_MODEL="MiniMax-M2.5"
+
+    # 配置 ~/.claude.json（跳过 onboarding）
+    node --eval '
+        const fs = require("fs");
+        const path = require("path");
+        const filePath = path.join(process.env.HOME || "/root", ".claude.json");
+        const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
+        fs.writeFileSync(filePath, JSON.stringify({ ...content, hasCompletedOnboarding: true }, null, 2));
+    '
+
+    # 配置 ~/.claude/settings.json
+    mkdir -p "${HOME}/.claude"
+    node --eval '
+        const fs = require("fs");
+        const path = require("path");
+        const filePath = path.join(process.env.HOME || "/root", ".claude", "settings.json");
+        const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
+        const model = "'"${MINIMAX_MODEL}"'";
+        fs.writeFileSync(filePath, JSON.stringify({
+            ...content,
+            env: {
+                ...(content.env || {}),
+                ANTHROPIC_AUTH_TOKEN: process.env.MINIMAX_API_KEY,
+                ANTHROPIC_BASE_URL: "'"${ANTHROPIC_BASE_URL}"'",
+                API_TIMEOUT_MS: "'"${API_TIMEOUT_MS}"'",
+                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+                ANTHROPIC_MODEL: model,
+                ANTHROPIC_SMALL_FAST_MODEL: model,
+                ANTHROPIC_DEFAULT_SONNET_MODEL: model,
+                ANTHROPIC_DEFAULT_OPUS_MODEL: model,
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: model
+            }
+        }, null, 2));
+    '
+
+    echo "[配置] MiniMax 配置完成"
+
 elif [ -n "$CLAUDE_CODE_URL" ] && [ -n "$CLAUDE_CODE_KEY" ]; then
     # ===== 原有代理模式 =====
     echo "[配置] 使用代理模式: ${CLAUDE_CODE_URL}"
@@ -54,7 +98,7 @@ elif [ -n "$CLAUDE_CODE_URL" ] && [ -n "$CLAUDE_CODE_KEY" ]; then
     echo "[配置] Claude Code 配置完成"
 
 else
-    echo "[警告] 未设置 ZHIPU_API_KEY 或 CLAUDE_CODE_URL/CLAUDE_CODE_KEY"
+    echo "[警告] 未设置 ZHIPU_API_KEY / MINIMAX_API_KEY 或 CLAUDE_CODE_URL/CLAUDE_CODE_KEY"
 fi
 
 # 将 Claude 配置复制到非 root 用户（--dangerously-skip-permissions 需要非 root）

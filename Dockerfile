@@ -52,10 +52,12 @@ WORKDIR /app
 # 环境变量
 ENV NODE_ENV=production
 
-# Claude Code 配置（通过 docker-compose 覆盖）
-# 模式一：智谱 GLM5（设置 ZHIPU_API_KEY 即启用）
+# Claude Code 配置（通过 docker-compose 覆盖，优先级从高到低）
+# 模式一：智谱 GLM5
 ENV ZHIPU_API_KEY=
-# 模式二：代理模式（ZHIPU_API_KEY 未设置时使用）
+# 模式二：MiniMax
+ENV MINIMAX_API_KEY=
+# 模式三：代理模式
 ENV CLAUDE_CODE_URL=
 ENV CLAUDE_CODE_KEY=
 # Claude Code 模型名称（可选，默认 opus）
