@@ -3,7 +3,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { resolve as pathResolve, dirname } from 'path';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { writeFile as fsWriteFile, mkdir as fsMkdir, rm as fsRm } from 'fs/promises';
+import { writeFile as fsWriteFile, mkdir as fsMkdir, rm as fsRm, rename as fsRename } from 'fs/promises';
 import { exec } from 'child_process';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
@@ -249,12 +249,41 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
 
         // 记录 Claude 执行前 temp 目录中已有的文件（用于后续检测新生成的文件）
         const tempDir = pathResolve(__dirname, '../../app/temp', conversationId);
+        const tempRootDir = pathResolve(__dirname, '../../app/temp');
         let existingTempFiles = new Set();
+        let existingTempRootFiles = new Set();
         try {
           if (existsSync(tempDir)) existingTempFiles = new Set(readdirSync(tempDir));
         } catch {}
+        // 记录 temp 根目录已有文件，用于检测被误放到根目录的文件
+        try {
+          if (existsSync(tempRootDir)) existingTempRootFiles = new Set(readdirSync(tempRootDir));
+        } catch {}
 
         const result = await callClaudeCode(msgContent || '请查看我上传的文件', conversationId, history, attachments);
+
+        // 抢救被误放到 app/temp/ 根目录的文件（Claude 有时忽略 conversationId 子目录）
+        try {
+          if (existsSync(tempRootDir)) {
+            const afterRootFiles = readdirSync(tempRootDir);
+            for (const name of afterRootFiles) {
+              if (existingTempRootFiles.has(name)) continue; // 之前就有的，跳过
+              const fullPath = pathResolve(tempRootDir, name);
+              try {
+                const stat = statSync(fullPath);
+                if (!stat.isFile()) continue; // 只移动文件，不移动目录（子目录可能是其他对话的）
+                const destPath = pathResolve(tempDir, name);
+                await fsMkdir(tempDir, { recursive: true });
+                await fsRename(fullPath, destPath);
+                console.log(`[FileRescue] 移动误放文件: ${name} -> temp/${conversationId}/${name}`);
+              } catch (e) {
+                console.warn(`[FileRescue] 移动失败 ${name}:`, e.message);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`[FileRescue] 扫描失败:`, e.message);
+        }
 
         // 调试：检查 Claude 运行后 temp 目录的变化
         try {

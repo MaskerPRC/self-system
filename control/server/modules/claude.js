@@ -241,13 +241,16 @@ content: <skill 的完整 Markdown 内容，包含使用说明、API 端点、�
 
 类型四：生成文件并分享给用户
 如果用户要求你生成或创建文件（图片、文档、数据文件、音频、视频、SVG 等），你必须：
-1. 文件输出目录已预先创建好，绝对路径为: ${tempDir}
-   - 你也可以使用相对路径（相对于工作目录）: app/temp/${conversationId}/
+1. 文件必须写入到对话专属目录（非常重要！不要写到 app/temp/ 根目录！）：
+   - 绝对路径: ${tempDir}
+   - 相对路径: app/temp/${conversationId}/
 2. 使用 Write 工具将文件实际写入到该目录
 3. 文件名使用时间戳前缀避免冲突，例如: ${Date.now()}-filename.svg
 4. 写入文件后，输出 [FILE_INFO] 标记通知系统（可选，系统也会自动扫描该目录发现新文件）：
 [FILE_INFO] path: app/temp/${conversationId}/<文件名> name: <显示名称> type: <MIME类型> size: <文件大小字节数> [/FILE_INFO]
 5. 同时用 [RESPONSE] 附带文字说明
+
+⚠️ 严禁将文件写入 app/temp/ 根目录！必须写入 app/temp/${conversationId}/ 子目录！
 
 重要提醒：
 - 你无法生成真正的位图图片（PNG/JPG），但你可以生成 SVG 矢量图、HTML 可视化文件、JSON/CSV 数据文件、Markdown 文档等
