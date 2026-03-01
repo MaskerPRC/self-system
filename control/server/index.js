@@ -400,7 +400,7 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
 
 const chatUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }
+  limits: { fileSize: 50 * 1024 * 1024 }
 }).array('files', 10);
 
 app.post('/api/conversations/:id/upload', (req, res) => {
