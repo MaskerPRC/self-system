@@ -11,40 +11,11 @@ echo "=========================================="
 echo "[配置] 正在配置 Claude Code..."
 
 if [ -n "$ZHIPU_API_KEY" ]; then
-    # ===== 智谱 GLM5 模式 =====
+    # ===== 智谱 GLM5 模式（官方脚本） =====
     echo "[配置] 检测到 ZHIPU_API_KEY，使用智谱 GLM5 模式"
-
-    ANTHROPIC_BASE_URL="https://open.bigmodel.cn/api/anthropic"
-    API_TIMEOUT_MS="3000000"
-
-    # 配置 ~/.claude.json（跳过 onboarding）
-    node --eval '
-        const fs = require("fs");
-        const path = require("path");
-        const filePath = path.join(process.env.HOME || "/root", ".claude.json");
-        const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
-        fs.writeFileSync(filePath, JSON.stringify({ ...content, hasCompletedOnboarding: true }, null, 2));
-    '
-
-    # 配置 ~/.claude/settings.json
-    mkdir -p "${HOME}/.claude"
-    node --eval '
-        const fs = require("fs");
-        const path = require("path");
-        const filePath = path.join(process.env.HOME || "/root", ".claude", "settings.json");
-        const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
-        fs.writeFileSync(filePath, JSON.stringify({
-            ...content,
-            env: {
-                ...(content.env || {}),
-                ANTHROPIC_AUTH_TOKEN: process.env.ZHIPU_API_KEY,
-                ANTHROPIC_BASE_URL: "'"${ANTHROPIC_BASE_URL}"'",
-                API_TIMEOUT_MS: "'"${API_TIMEOUT_MS}"'",
-                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
-            }
-        }, null, 2));
-    '
-
+    curl -sO "https://cdn.bigmodel.cn/install/claude_code_env.sh"
+    echo "$ZHIPU_API_KEY" | bash ./claude_code_env.sh
+    rm -f ./claude_code_env.sh
     echo "[配置] 智谱 GLM5 配置完成"
 
 elif [ -n "$MINIMAX_API_KEY" ]; then
