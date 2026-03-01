@@ -57,6 +57,7 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 const authLoading = ref(true)
 const needLogin = ref(false)
+const isPublicPage = ref(false)
 const publicRoutes = ref(new Set())
 const loginForm = ref({ username: '', password: '' })
 const loginError = ref('')
@@ -78,6 +79,22 @@ async function fetchPublicRoutes() {
 
 async function checkAuth() {
   try {
+    // Check if current path is a public route (fetch from control server)
+    const currentPath = window.location.pathname
+    try {
+      const base = import.meta.env.DEV ? '' : `http://${location.hostname}:3000`
+      const pr = await fetch(`${base}/api/pages/public-routes`)
+      const pd = await pr.json()
+      if (pd.success && Array.isArray(pd.data)) {
+        if (pd.data.some(route => currentPath === route || currentPath.startsWith(route + '/'))) {
+          isPublicPage.value = true
+          needLogin.value = false
+          authLoading.value = false
+          return
+        }
+      }
+    } catch {}
+
     await Promise.all([
       fetchPublicRoutes(),
       (async () => {
@@ -115,11 +132,11 @@ async function handleLogin() {
   }
 }
 
-// Intercept 401 globally, but not for public routes
+// Intercept 401 globally (skip for public pages)
 const _origFetch = window.fetch
 window.fetch = async (...args) => {
   const res = await _origFetch(...args)
-  if (res.status === 401 && !(args[0] + '').includes('/api/auth/')) {
+  if (res.status === 401 && !(args[0] + '').includes('/api/auth/') && !isPublicPage.value) {
     if (!isCurrentRoutePublic.value) {
       needLogin.value = true
     }
