@@ -1,5 +1,5 @@
 import { spawn, execSync } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { resolve as pathResolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { broadcast } from './websocket.js';
@@ -146,6 +146,10 @@ export async function callClaudeCode(requirement, conversationId, history = [], 
   const appPath = pathResolve(projectRoot, 'app');
   if (!existsSync(appPath)) throw new Error('应用项目目录不存在');
 
+  // 预先创建 temp 目录，确保 Claude Code 可以直接写入文件
+  const tempDir = pathResolve(projectRoot, 'app', 'temp', conversationId);
+  mkdirSync(tempDir, { recursive: true });
+
   // 加载已安装的 Skills
   let skillsSection = '';
   try {
@@ -237,24 +241,29 @@ content: <skill 的完整 Markdown 内容，包含使用说明、API 端点、�
 
 类型四：生成文件并分享给用户
 如果用户要求你生成或创建文件（图片、文档、数据文件、音频、视频、SVG 等），你必须：
-1. 使用 Write 工具将文件实际写入磁盘到 app/temp/${conversationId}/ 目录下（先确保目录存在）
-2. 文件名使用时间戳前缀避免冲突，例如: ${Date.now()}-filename.png
-3. 使用 fs.statSync 获取文件的准确字节数
-4. 必须输出 [FILE_INFO] 标记，系统才能将文件展示给用户下载：
+1. 文件输出目录已预先创建好，绝对路径为: ${tempDir}
+   - 你也可以使用相对路径（相对于工作目录）: app/temp/${conversationId}/
+2. 使用 Write 工具将文件实际写入到该目录
+3. 文件名使用时间戳前缀避免冲突，例如: ${Date.now()}-filename.svg
+4. 写入文件后，输出 [FILE_INFO] 标记通知系统（可选，系统也会自动扫描该目录发现新文件）：
 [FILE_INFO] path: app/temp/${conversationId}/<文件名> name: <显示名称> type: <MIME类型> size: <文件大小字节数> [/FILE_INFO]
 5. 同时用 [RESPONSE] 附带文字说明
 
-重要：用户要求"生成图片"、"创建文件"、"导出数据"等，必须实际创建文件并输出 [FILE_INFO]，绝对不能只用 [RESPONSE] 文字描述。如果没有输出 [FILE_INFO]，用户将无法下载文件。
+重要提醒：
+- 你无法生成真正的位图图片（PNG/JPG），但你可以生成 SVG 矢量图、HTML 可视化文件、JSON/CSV 数据文件、Markdown 文档等
+- 如果用户要求"生成图片"，请生成 SVG 格式的图像文件，SVG 可以在浏览器中完美展示
+- 必须使用 Write 工具实际创建文件，不能只在文字中描述
+- 即使你不输出 [FILE_INFO] 标记，只要文件实际写入了 ${tempDir} 目录，系统也会自动发现并展示给用户
 
 注意：
-- 文件必须实际存在于指定路径，否则会被忽略
-- 可以同时生成多个文件，每个文件一个 [FILE_INFO] 标记
+- 文件必须实际存在于指定路径
+- 可以同时生成多个文件
 - [FILE_INFO] 可以与 [RESPONSE]、[PAGE_INFO] 等标记同时出现
 
 【重要规则】
 - 每次输出对应的标记（[RESPONSE]、[PAGE_INFO]、[SKILL_INFO]、[FILE_INFO]）
 - 简单问答（如"1+1等于几"、"解释一下React"）直接用 [RESPONSE] 回答，不要创建页面
-- 但如果用户明确要求生成/创建/导出文件，必须实际创建文件并输出 [FILE_INFO]
+- 如果用户要求生成/创建/导出文件，必须使用 Write 工具实际创建文件到 ${tempDir} 目录
 - [FILE_INFO] 可以与其他任何标记同时出现（例如生成文件同时回复文字）
 - 如果既创建了页面又创建了 skill，可以同时输出 [PAGE_INFO] 和 [SKILL_INFO]
 `;

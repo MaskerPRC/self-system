@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { resolve as pathResolve, dirname } from 'path';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { writeFile as fsWriteFile, mkdir as fsMkdir, rm as fsRm } from 'fs/promises';
 import { exec } from 'child_process';
 import multer from 'multer';
@@ -247,12 +247,33 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
           } catch {}
         }
 
+        // 记录 Claude 执行前 temp 目录中已有的文件（用于后续检测新生成的文件）
+        const tempDir = pathResolve(__dirname, '../../app/temp', conversationId);
+        let existingTempFiles = new Set();
+        try {
+          if (existsSync(tempDir)) existingTempFiles = new Set(readdirSync(tempDir));
+        } catch {}
+
         const result = await callClaudeCode(msgContent || '请查看我上传的文件', conversationId, history, attachments);
+
+        // 调试：检查 Claude 运行后 temp 目录的变化
+        try {
+          if (existsSync(tempDir)) {
+            const afterFiles = readdirSync(tempDir);
+            const newFiles = afterFiles.filter(f => !existingTempFiles.has(f));
+            console.log(`[FileDebug] temp 目录 ${tempDir}: 之前 ${existingTempFiles.size} 个文件, 之后 ${afterFiles.length} 个文件, 新增 ${newFiles.length} 个: ${newFiles.join(', ')}`);
+          } else {
+            console.log(`[FileDebug] temp 目录不存在: ${tempDir}`);
+          }
+        } catch (e) {
+          console.log(`[FileDebug] 扫描失败: ${e.message}`);
+        }
 
         // 1. 检查是否为简单回复 [RESPONSE]
         const responseText = extractResponse(result.stdout);
         if (responseText) {
-          const responseFiles = extractFileInfo(result.stdout);
+          let responseFiles = extractFileInfo(result.stdout);
+          if (responseFiles.length === 0) responseFiles = scanNewFiles(tempDir, existingTempFiles, conversationId);
           const insertData = { conversation_id: conversationId, role: 'assistant', content: responseText };
           if (responseFiles.length > 0) insertData.attachments = responseFiles;
 
@@ -315,7 +336,8 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
 
         // 4. 保存助手回复（包含 Claude 的自然语言描述）
         const naturalText = extractNaturalText(result.stdout);
-        const fileAttachments = extractFileInfo(result.stdout);
+        let fileAttachments = extractFileInfo(result.stdout);
+        if (fileAttachments.length === 0) fileAttachments = scanNewFiles(tempDir, existingTempFiles, conversationId);
         const replyParts = [];
         if (naturalText) replyParts.push(naturalText);
         if (pageInfo) replyParts.push(`已创建交互页面「${pageInfo.title}」\n路由: ${pageInfo.routePath}`);
@@ -983,6 +1005,57 @@ function extractFileInfo(output) {
     } else {
       console.warn(`[FileInfo] 文件不存在: ${absPath}`);
     }
+  }
+  return files;
+}
+
+/**
+ * 根据文件扩展名猜测 MIME 类型
+ */
+function guessMimeType(fileName) {
+  const ext = (fileName.match(/\.([^.]+)$/) || [])[1]?.toLowerCase();
+  const mimeMap = {
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+    webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon',
+    mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', avi: 'video/x-msvideo',
+    mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac',
+    pdf: 'application/pdf', zip: 'application/zip', json: 'application/json',
+    txt: 'text/plain', csv: 'text/csv', html: 'text/html', css: 'text/css',
+    js: 'application/javascript', xml: 'application/xml', md: 'text/markdown',
+    doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  };
+  return mimeMap[ext] || 'application/octet-stream';
+}
+
+/**
+ * 扫描 temp 目录中新增的文件（Claude 运行前不存在的文件）
+ * 作为 [FILE_INFO] 标记的 fallback
+ */
+function scanNewFiles(tempDir, existingFiles, conversationId) {
+  const files = [];
+  try {
+    if (!existsSync(tempDir)) return files;
+    const currentFiles = readdirSync(tempDir);
+    for (const name of currentFiles) {
+      if (existingFiles.has(name)) continue; // 跳过已有文件
+      try {
+        const fullPath = pathResolve(tempDir, name);
+        const stat = statSync(fullPath);
+        if (!stat.isFile()) continue;
+        files.push({
+          name,
+          path: `app/temp/${conversationId}/${name}`,
+          size: stat.size,
+          type: guessMimeType(name)
+        });
+      } catch {}
+    }
+  } catch (e) {
+    console.warn('[scanNewFiles] 扫描失败:', e.message);
+  }
+  if (files.length > 0) {
+    console.log(`[scanNewFiles] 发现 ${files.length} 个新文件:`, files.map(f => f.name).join(', '));
   }
   return files;
 }
