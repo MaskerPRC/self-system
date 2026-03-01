@@ -212,6 +212,7 @@ ${requirement}
 6. 保持代码风格一致，页面要有完整 UI 和功能
 7. 如需新依赖使用 pnpm。重要：不要使用需要原生编译的 npm 包（如 better-sqlite3、sharp 等），优先使用纯 JavaScript 实现的替代方案（如 sql.js、jimp 等）
 8. 修改完成后代码应能正常运行
+9. 【严禁使用 localhost 或 127.0.0.1】前端代码中调用后端 API 时，必须使用相对路径（如 fetch('/api/xxx')），严禁写 http://localhost:3001 或 http://127.0.0.1:3001。项目通过 Vite proxy 转发 /api 请求到后端，直接用相对路径即可。错误示例：const API = import.meta.env.DEV ? 'http://localhost:3001/api/xxx' : '/api/xxx'。正确写法：const API = '/api/xxx' 或直接 fetch('/api/xxx')
 完成后输出：
 [PAGE_INFO]
 route: /<你添加的路由path>

@@ -200,6 +200,14 @@
             </div>
             <div class="flex items-center gap-1 shrink-0 ml-3">
               <button
+                @click="toggleDebug"
+                class="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+                :class="debugMode ? 'text-amber-500 bg-amber-50' : 'text-ink-500 hover:text-brand-600 hover:bg-brand-50'"
+                title="调试模式"
+              >
+                <i class="ph ph-bug text-lg"></i>
+              </button>
+              <button
                 @click="openPreviewInNewWindow"
                 class="w-8 h-8 rounded-full flex items-center justify-center text-ink-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
                 title="新窗口打开"
@@ -334,11 +342,18 @@ const previewTitle = ref('')
 const previewRoute = ref('')
 const iframeLoading = ref(false)
 const iframeRef = ref(null)
+const debugMode = ref(false)
 
 function previewPage(p) {
   previewTitle.value = p.title
   previewRoute.value = p.route_path
-  previewUrl.value = `${appBaseUrl.value}${p.route_path}`
+  let url = `${appBaseUrl.value}${p.route_path}`
+  if (debugMode.value) {
+    const u = new URL(url)
+    u.searchParams.set('debug', '1')
+    url = u.toString()
+  }
+  previewUrl.value = url
   iframeLoading.value = true
   previewVisible.value = true
 }
@@ -355,6 +370,22 @@ function openPreviewInNewWindow() {
 }
 
 function refreshPreview() {
+  if (iframeRef.value) {
+    iframeLoading.value = true
+    iframeRef.value.src = previewUrl.value
+  }
+}
+
+function toggleDebug() {
+  debugMode.value = !debugMode.value
+  if (!previewUrl.value) return
+  const u = new URL(previewUrl.value)
+  if (debugMode.value) {
+    u.searchParams.set('debug', '1')
+  } else {
+    u.searchParams.delete('debug')
+  }
+  previewUrl.value = u.toString()
   if (iframeRef.value) {
     iframeLoading.value = true
     iframeRef.value.src = previewUrl.value

@@ -70,3 +70,6 @@
 .safe-top { padding-top: env(safe-area-inset-top, 0px); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .safe-bottom-nav { bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+@media (display-mode: standalone) {
+  .safe-bottom-nav { bottom: calc(0.25rem + env(safe-area-inset-bottom, 0px)); }
+}

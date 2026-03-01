@@ -10,6 +10,14 @@
         </div>
         <div class="flex items-center gap-1 shrink-0 ml-3">
           <button
+            @click="toggleDebug"
+            class="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+            :class="debugMode ? 'text-amber-500 bg-amber-50' : 'text-ink-500 hover:text-brand-600 hover:bg-brand-50'"
+            title="调试模式"
+          >
+            <i class="ph ph-bug text-lg"></i>
+          </button>
+          <button
             @click="openInNewWindow"
             class="w-8 h-8 rounded-full flex items-center justify-center text-ink-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
             title="新窗口打开"
@@ -60,6 +68,7 @@ const loading = ref(true)
 const iframeRef = ref(null)
 const appBaseUrl = ref('')
 const iframeSrc = ref('')
+const debugMode = ref(false)
 
 async function fetchConfig() {
   try {
@@ -90,6 +99,22 @@ function openInNewWindow() {
 }
 
 function refreshIframe() {
+  if (iframeRef.value) {
+    loading.value = true
+    iframeRef.value.src = iframeSrc.value
+  }
+}
+
+function toggleDebug() {
+  debugMode.value = !debugMode.value
+  if (!iframeSrc.value) return
+  const u = new URL(iframeSrc.value)
+  if (debugMode.value) {
+    u.searchParams.set('debug', '1')
+  } else {
+    u.searchParams.delete('debug')
+  }
+  iframeSrc.value = u.toString()
   if (iframeRef.value) {
     loading.value = true
     iframeRef.value.src = iframeSrc.value

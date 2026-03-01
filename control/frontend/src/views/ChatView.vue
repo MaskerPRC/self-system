@@ -240,10 +240,27 @@ function connectWs() {
   ws.onclose = () => setTimeout(connectWs, 5000)
 }
 
+// 监听来自 App.vue 的对话切换事件（一键修Bug触发）
+function onSwitchConversation(e) {
+  const id = e.detail?.id
+  if (id) {
+    activeId.value = id
+    localStorage.setItem('activeConvId', id)
+    fetchConvs()
+  }
+}
+
 watch(activeId, (id) => {
   fetchMessages(id)
   isProcessing.value = id ? processingList.value.includes(id) : false
 })
-onMounted(() => { fetchConvs(); connectWs() })
-onUnmounted(() => { if (ws) ws.close() })
+onMounted(() => {
+  fetchConvs()
+  connectWs()
+  window.addEventListener('switch-conversation', onSwitchConversation)
+})
+onUnmounted(() => {
+  if (ws) ws.close()
+  window.removeEventListener('switch-conversation', onSwitchConversation)
+})
 </script>

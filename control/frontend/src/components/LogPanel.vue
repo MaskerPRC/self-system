@@ -16,6 +16,25 @@
       </div>
       <div class="flex items-center gap-1">
         <span class="text-[10px] px-1.5 py-0.5 bg-white/10 text-stone-500 rounded font-mono">{{ currentLines.length }}</span>
+        <!-- 复制按钮 -->
+        <button
+          @click="copyLogs"
+          class="w-7 h-7 flex items-center justify-center rounded transition-colors"
+          :class="copied ? 'text-emerald-400 bg-emerald-400/10' : 'text-stone-500 hover:text-stone-300'"
+          :title="copied ? '已复制' : '复制日志'"
+        >
+          <i :class="copied ? 'ph ph-check' : 'ph ph-copy'" class="text-sm"></i>
+        </button>
+        <!-- 修Bug按钮（仅应用日志显示） -->
+        <button
+          v-if="activeTab === 'app'"
+          @click="showFixConfirm = true"
+          class="w-7 h-7 flex items-center justify-center text-amber-500 hover:text-amber-400 hover:bg-amber-400/10 rounded transition-colors disabled:opacity-30"
+          title="一键修Bug"
+          :disabled="!currentLines.length"
+        >
+          <i class="ph ph-wrench text-sm"></i>
+        </button>
         <button
           @click="autoScroll = !autoScroll"
           class="w-7 h-7 flex items-center justify-center rounded transition-colors"
@@ -48,6 +67,34 @@
       </div>
       <div v-for="(line, i) in currentLines" :key="i" class="whitespace-pre-wrap break-all" :class="lineClass(line)">{{ line }}</div>
     </div>
+
+    <!-- 修Bug确认弹窗 -->
+    <div v-if="showFixConfirm" class="absolute inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showFixConfirm = false">
+      <div class="bg-[#1e1e3a] border border-white/10 rounded-2xl p-6 mx-4 max-w-sm w-full shadow-2xl">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+            <i class="ph ph-wrench text-xl text-amber-400"></i>
+          </div>
+          <div>
+            <h3 class="text-white font-medium text-sm">一键修Bug</h3>
+            <p class="text-stone-400 text-xs mt-0.5">将应用错误日志发送给 AI 修复</p>
+          </div>
+        </div>
+        <p class="text-stone-300 text-xs mb-5 leading-relaxed">
+          将创建一个新对话，并将当前的应用日志（最近 {{ Math.min(currentLines.length, 100) }} 行）发送给 Claude，让它自动分析并修复问题。
+        </p>
+        <div class="flex gap-3">
+          <button
+            @click="showFixConfirm = false"
+            class="flex-1 px-4 py-2 text-xs font-medium text-stone-400 bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
+          >取消</button>
+          <button
+            @click="confirmFix"
+            class="flex-1 px-4 py-2 text-xs font-medium text-white bg-amber-600 hover:bg-amber-500 rounded-xl transition-colors"
+          >确认修复</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -60,10 +107,12 @@ const props = defineProps({
   activeTab: { type: String, default: 'app' }
 })
 
-defineEmits(['close', 'clear', 'update:activeTab'])
+const emit = defineEmits(['close', 'clear', 'update:activeTab', 'fix-bug'])
 
 const logContainer = ref(null)
 const autoScroll = ref(true)
+const copied = ref(false)
+const showFixConfirm = ref(false)
 
 const currentLines = computed(() => {
   return props.activeTab === 'app' ? props.appLines : props.controlLines
@@ -77,6 +126,21 @@ function lineClass(line) {
   if (/={10,}/.test(line)) return 'text-brand-400 font-bold'
   if (/^\s*at\s/.test(line)) return 'text-stone-600'
   return 'text-stone-300'
+}
+
+function copyLogs() {
+  const text = currentLines.value.join('\n')
+  navigator.clipboard.writeText(text).then(() => {
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  }).catch(() => {})
+}
+
+function confirmFix() {
+  const lines = currentLines.value.slice(-100)
+  const logContent = lines.join('\n')
+  showFixConfirm.value = false
+  emit('fix-bug', { logType: '后端', logContent })
 }
 
 function scrollToBottom() {

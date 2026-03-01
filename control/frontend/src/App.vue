@@ -67,6 +67,7 @@
           @update:activeTab="activeLogTab = $event"
           @close="showLogs = false"
           @clear="clearCurrentLogs"
+          @fix-bug="handleFixBug"
         />
       </div>
     </div>
@@ -124,9 +125,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import SettingsModal from './components/SettingsModal.vue'
 import LogPanel from './components/LogPanel.vue'
 
+const router = useRouter()
 const API = ''
 const MAX_LOG_LINES = 500
 
@@ -314,6 +317,40 @@ function connectWs() {
     } catch {}
   }
   ws.onclose = () => { setTimeout(connectWs, 5000) }
+}
+
+// ---- Fix Bug ----
+
+async function handleFixBug({ logType, logContent }) {
+  try {
+    // 1. 创建新对话
+    const convRes = await fetch(`${API}/api/conversations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: `修复${logType}Bug` })
+    })
+    const convData = await convRes.json()
+    if (!convData.success) return
+
+    const conversationId = convData.data.id
+
+    // 2. 发送修复消息
+    const message = `应用${logType}出现错误，请根据以下日志分析并修复问题：\n\n\`\`\`\n${logContent}\n\`\`\``
+    await fetch(`${API}/api/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message })
+    })
+
+    // 3. 跳转到对话页面
+    localStorage.setItem('activeConvId', conversationId)
+    showLogs.value = false
+    router.push('/chat')
+    // 通知 ChatView 切换到新对话（如果已挂载）
+    window.dispatchEvent(new CustomEvent('switch-conversation', { detail: { id: conversationId } }))
+  } catch (e) {
+    console.error('Fix bug failed:', e)
+  }
 }
 
 onMounted(async () => {
