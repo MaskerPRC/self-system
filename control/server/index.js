@@ -406,7 +406,7 @@ const chatUpload = multer({
 app.post('/api/conversations/:id/upload', (req, res) => {
   chatUpload(req, res, async (err) => {
     if (err) {
-      if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ success: false, error: '文件大小超过 20MB 限制' });
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ success: false, error: '文件大小超过 50MB 限制' });
       return res.status(400).json({ success: false, error: err.message });
     }
 
