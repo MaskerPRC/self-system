@@ -59,6 +59,44 @@ elif [ -n "$MINIMAX_API_KEY" ]; then
 
     echo "[配置] MiniMax 配置完成"
 
+elif [ -n "$QWEN_API_KEY" ]; then
+    # ===== 通义千问 Qwen 模式 =====
+    echo "[配置] 检测到 QWEN_API_KEY，使用通义千问 Coding Plan 模式"
+
+    QWEN_MODEL="${QWEN_MODEL:-qwen3.5-plus}"
+
+    # 配置 ~/.claude.json（跳过 onboarding）
+    node --eval '
+        const os = require("os");
+        const fs = require("fs");
+        const path = require("path");
+        const filePath = path.join(os.homedir(), ".claude.json");
+        const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
+        fs.writeFileSync(filePath, JSON.stringify({ ...content, hasCompletedOnboarding: true }, null, 2), "utf-8");
+    '
+
+    # 配置 ~/.claude/settings.json
+    mkdir -p "$HOME/.claude"
+    node --eval '
+        const os = require("os");
+        const fs = require("fs");
+        const path = require("path");
+        const filePath = path.join(os.homedir(), ".claude", "settings.json");
+        const apiKey = "'"$QWEN_API_KEY"'";
+        const model = "'"$QWEN_MODEL"'";
+        const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
+        fs.writeFileSync(filePath, JSON.stringify({
+            ...content,
+            env: {
+                ANTHROPIC_AUTH_TOKEN: apiKey,
+                ANTHROPIC_BASE_URL: "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+                ANTHROPIC_MODEL: model
+            }
+        }, null, 2), "utf-8");
+    '
+
+    echo "[配置] 通义千问 Coding Plan 配置完成 (模型: ${QWEN_MODEL})"
+
 elif [ -n "$CLAUDE_CODE_URL" ] && [ -n "$CLAUDE_CODE_KEY" ]; then
     # ===== 原有代理模式 =====
     echo "[配置] 使用代理模式: ${CLAUDE_CODE_URL}"
@@ -66,7 +104,7 @@ elif [ -n "$CLAUDE_CODE_URL" ] && [ -n "$CLAUDE_CODE_KEY" ]; then
     echo "[配置] Claude Code 配置完成"
 
 else
-    echo "[警告] 未设置 ZHIPU_API_KEY / MINIMAX_API_KEY 或 CLAUDE_CODE_URL/CLAUDE_CODE_KEY"
+    echo "[警告] 未设置 ZHIPU_API_KEY / MINIMAX_API_KEY / QWEN_API_KEY 或 CLAUDE_CODE_URL/CLAUDE_CODE_KEY"
 fi
 
 # 将 Claude 配置复制到非 root 用户（--dangerously-skip-permissions 需要非 root）

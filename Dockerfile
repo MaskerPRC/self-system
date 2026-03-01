@@ -57,7 +57,10 @@ ENV NODE_ENV=production
 ENV ZHIPU_API_KEY=
 # 模式二：MiniMax
 ENV MINIMAX_API_KEY=
-# 模式三：代理模式
+# 模式三：通义千问 Coding Plan
+ENV QWEN_API_KEY=
+ENV QWEN_MODEL=
+# 模式四：代理模式
 ENV CLAUDE_CODE_URL=
 ENV CLAUDE_CODE_KEY=
 # Claude Code 模型名称（可选，默认 opus）
