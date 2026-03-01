@@ -71,14 +71,14 @@
               {{ m.content }}
             </div>
             <!-- File attachments -->
-            <div v-if="m.attachments && m.attachments.length" class="mt-3 space-y-3">
+            <div v-if="m.attachments && m.attachments.length" class="mt-3 flex flex-wrap gap-3">
               <template v-for="(att, i) in m.attachments" :key="i">
                 <!-- Image preview (skip if too large) -->
-                <div v-if="isImage(att) && canPreview(att)" class="group relative inline-block">
+                <div v-if="isImage(att) && canPreview(att)" class="group relative">
                   <img
                     :src="previewUrl(att)"
                     :alt="att.name"
-                    class="max-w-xs sm:max-w-sm rounded-xl border border-stone-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                    class="max-w-[200px] max-h-[200px] object-cover rounded-xl border border-stone-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                     @click="openFullImage(att)"
                     loading="lazy"
                   />
@@ -88,11 +88,11 @@
                       <i class="ph ph-download-simple text-sm"></i>
                     </a>
                   </div>
-                  <div class="text-xs text-ink-400 mt-1">{{ att.name }} ({{ formatSize(att.size) }})</div>
+                  <div class="text-xs text-ink-400 mt-1 max-w-[200px] truncate">{{ att.name }}</div>
                 </div>
 
-                <!-- Video player (skip if too large) -->
-                <div v-else-if="isVideo(att) && canPreview(att)" class="max-w-xs sm:max-w-md">
+                <!-- Video player (skip if too large) - full width -->
+                <div v-else-if="isVideo(att) && canPreview(att)" class="w-full max-w-xs sm:max-w-md">
                   <video :src="previewUrl(att)" controls preload="metadata"
                     class="w-full rounded-xl border border-stone-200 shadow-sm"></video>
                   <div class="flex items-center justify-between mt-1">
@@ -104,8 +104,8 @@
                   </div>
                 </div>
 
-                <!-- Audio player (skip if too large) -->
-                <div v-else-if="isAudio(att) && canPreview(att)" class="max-w-xs sm:max-w-md">
+                <!-- Audio player (skip if too large) - full width -->
+                <div v-else-if="isAudio(att) && canPreview(att)" class="w-full max-w-xs sm:max-w-md">
                   <div class="flex items-center gap-3 bg-stone-50 rounded-xl px-4 py-3 border border-stone-200">
                     <i class="ph-duotone ph-music-note text-2xl text-brand-500 shrink-0"></i>
                     <div class="flex-1 min-w-0">
@@ -121,15 +121,15 @@
                 </div>
 
                 <!-- Generic file card (fallback for all other files + oversized media) -->
-                <div v-else class="flex items-center gap-3 bg-stone-50 rounded-xl px-4 py-3 border border-stone-200 max-w-xs">
-                  <i :class="attIcon(att)" class="text-2xl shrink-0"></i>
-                  <div class="flex-1 min-w-0">
-                    <div class="text-sm text-ink-800 truncate">{{ att.name }}</div>
+                <div v-else class="flex items-center gap-3 bg-stone-50 rounded-xl px-3 py-2.5 border border-stone-200">
+                  <i :class="attIcon(att)" class="text-xl shrink-0"></i>
+                  <div class="min-w-0">
+                    <div class="text-sm text-ink-800 truncate max-w-[140px]">{{ att.name }}</div>
                     <div class="text-xs text-ink-400">{{ formatSize(att.size) }}</div>
                   </div>
                   <a :href="downloadUrl(att)" :download="att.name"
-                     class="w-8 h-8 flex items-center justify-center text-ink-400 hover:text-brand-500 rounded-full hover:bg-stone-100 shrink-0">
-                    <i class="ph ph-download-simple"></i>
+                     class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-brand-500 rounded-full hover:bg-stone-100 shrink-0">
+                    <i class="ph ph-download-simple text-sm"></i>
                   </a>
                 </div>
               </template>
