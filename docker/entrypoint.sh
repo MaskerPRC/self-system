@@ -22,42 +22,39 @@ elif [ -n "$MINIMAX_API_KEY" ]; then
     # ===== MiniMax 模式 =====
     echo "[配置] 检测到 MINIMAX_API_KEY，使用 MiniMax 模式"
 
-    ANTHROPIC_BASE_URL="https://api.minimaxi.com/anthropic"
-    API_TIMEOUT_MS="3000000"
-    MINIMAX_MODEL="MiniMax-M2.5"
-
     # 配置 ~/.claude.json（跳过 onboarding）
     node --eval '
+        const os = require("os");
         const fs = require("fs");
         const path = require("path");
-        const filePath = path.join(process.env.HOME || "/root", ".claude.json");
+        const filePath = path.join(os.homedir(), ".claude.json");
         const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
-        fs.writeFileSync(filePath, JSON.stringify({ ...content, hasCompletedOnboarding: true }, null, 2));
+        fs.writeFileSync(filePath, JSON.stringify({ ...content, hasCompletedOnboarding: true }, null, 2), "utf-8");
     '
 
     # 配置 ~/.claude/settings.json
-    mkdir -p "${HOME}/.claude"
+    mkdir -p "$HOME/.claude"
     node --eval '
+        const os = require("os");
         const fs = require("fs");
         const path = require("path");
-        const filePath = path.join(process.env.HOME || "/root", ".claude", "settings.json");
+        const filePath = path.join(os.homedir(), ".claude", "settings.json");
+        const apiKey = "'"$MINIMAX_API_KEY"'";
         const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
-        const model = "'"${MINIMAX_MODEL}"'";
         fs.writeFileSync(filePath, JSON.stringify({
             ...content,
             env: {
-                ...(content.env || {}),
-                ANTHROPIC_AUTH_TOKEN: process.env.MINIMAX_API_KEY,
-                ANTHROPIC_BASE_URL: "'"${ANTHROPIC_BASE_URL}"'",
-                API_TIMEOUT_MS: "'"${API_TIMEOUT_MS}"'",
-                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
-                ANTHROPIC_MODEL: model,
-                ANTHROPIC_SMALL_FAST_MODEL: model,
-                ANTHROPIC_DEFAULT_SONNET_MODEL: model,
-                ANTHROPIC_DEFAULT_OPUS_MODEL: model,
-                ANTHROPIC_DEFAULT_HAIKU_MODEL: model
+                ANTHROPIC_BASE_URL: "https://api.minimaxi.com/anthropic",
+                ANTHROPIC_AUTH_TOKEN: apiKey,
+                API_TIMEOUT_MS: "3000000",
+                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1,
+                ANTHROPIC_MODEL: "MiniMax-M2.5",
+                ANTHROPIC_SMALL_FAST_MODEL: "MiniMax-M2.5",
+                ANTHROPIC_DEFAULT_SONNET_MODEL: "MiniMax-M2.5",
+                ANTHROPIC_DEFAULT_OPUS_MODEL: "MiniMax-M2.5",
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: "MiniMax-M2.5"
             }
-        }, null, 2));
+        }, null, 2), "utf-8");
     '
 
     echo "[配置] MiniMax 配置完成"
