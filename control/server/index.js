@@ -298,7 +298,10 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
           console.log(`[FileDebug] 扫描失败: ${e.message}`);
         }
 
-        // 1. 检查是否为简单回复 [RESPONSE]
+        // 1. 提取 Skill 信息（在所有分支之前，确保不会被 early return 跳过）
+        const skillInfo = await extractAndSaveSkill(result.stdout);
+
+        // 2. 检查是否为简单回复 [RESPONSE]
         const responseText = extractResponse(result.stdout);
         if (responseText) {
           let responseFiles = extractFileInfo(result.stdout);
@@ -313,9 +316,8 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
           return;
         }
 
-        // 2. 提取页面信息和 Skill 信息
+        // 3. 提取页面信息
         const pageInfo = extractPageInfo(result.stdout, content.trim());
-        const skillInfo = await extractAndSaveSkill(result.stdout);
 
         if (pageInfo) {
           // 检查该路由是否已有页面记录
