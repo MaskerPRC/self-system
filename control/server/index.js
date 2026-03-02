@@ -306,13 +306,15 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
         if (responseText) {
           let responseFiles = extractFileInfo(result.stdout);
           if (responseFiles.length === 0) responseFiles = scanNewFiles(tempDir, existingTempFiles, conversationId);
+          const responseAttachments = [...responseFiles];
+          if (skillInfo) responseAttachments.push({ type: 'skill_created', name: skillInfo.name, description: skillInfo.description });
           const insertData = { conversation_id: conversationId, role: 'assistant', content: responseText };
-          if (responseFiles.length > 0) insertData.attachments = responseFiles;
+          if (responseAttachments.length > 0) insertData.attachments = responseAttachments;
 
           await supabase.from('messages').insert(insertData);
 
           clearProcessing(conversationId);
-          broadcast({ type: 'completed', conversationId, requestId, message: '完成' });
+          broadcast({ type: 'completed', conversationId, requestId, message: '完成', skill: skillInfo });
           return;
         }
 
@@ -369,14 +371,14 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
         const naturalText = extractNaturalText(result.stdout);
         let fileAttachments = extractFileInfo(result.stdout);
         if (fileAttachments.length === 0) fileAttachments = scanNewFiles(tempDir, existingTempFiles, conversationId);
-        const replyParts = [];
-        if (naturalText) replyParts.push(naturalText);
-        if (pageInfo) replyParts.push(`已创建交互页面「${pageInfo.title}」\n路由: ${pageInfo.routePath}`);
-        if (skillInfo) replyParts.push(`已创建 Skill「${skillInfo.name}」\n${skillInfo.description}`);
-        const reply = replyParts.length > 0 ? replyParts.join('\n\n') : '需求处理完成';
+        const reply = naturalText || '需求处理完成';
+
+        const allAttachments = [...fileAttachments];
+        if (pageInfo) allAttachments.push({ type: 'page_created', name: pageInfo.title, route: pageInfo.routePath });
+        if (skillInfo) allAttachments.push({ type: 'skill_created', name: skillInfo.name, description: skillInfo.description });
 
         const assistantInsert = { conversation_id: conversationId, role: 'assistant', content: reply };
-        if (fileAttachments.length > 0) assistantInsert.attachments = fileAttachments;
+        if (allAttachments.length > 0) assistantInsert.attachments = allAttachments;
 
         await supabase.from('messages').insert(assistantInsert);
 

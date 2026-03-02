@@ -71,8 +71,39 @@
               {{ m.content }}
             </div>
             <!-- File attachments -->
-            <div v-if="m.attachments && m.attachments.length" class="mt-3 flex flex-wrap gap-3">
-              <template v-for="(att, i) in m.attachments" :key="i">
+            <div v-if="m.attachments && m.attachments.length" class="mt-3 flex flex-col gap-3">
+              <!-- Creation cards (page/skill) -->
+              <template v-for="(att, i) in m.attachments" :key="'card-' + i">
+                <div v-if="att.type === 'page_created'" class="flex items-start gap-3 bg-blue-50/60 rounded-2xl px-4 py-3 border border-blue-100 max-w-xs">
+                  <div class="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center text-blue-500 shrink-0 mt-0.5">
+                    <i class="ph-duotone ph-browser text-lg"></i>
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-xs text-blue-500 font-medium mb-0.5">已创建交互页面</div>
+                    <div class="text-sm text-ink-900 font-semibold">{{ att.name }}</div>
+                    <a :href="appUrl + att.route" target="_blank"
+                       class="text-xs text-blue-400 hover:text-blue-600 flex items-center gap-1 mt-1 transition-colors">
+                      {{ att.route }}
+                      <i class="ph ph-arrow-square-out text-[10px]"></i>
+                    </a>
+                  </div>
+                </div>
+                <div v-else-if="att.type === 'skill_created'" class="flex items-start gap-3 bg-amber-50/60 rounded-2xl px-4 py-3 border border-amber-100 max-w-xs">
+                  <div class="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-500 shrink-0 mt-0.5">
+                    <i class="ph-duotone ph-lightning text-lg"></i>
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-xs text-amber-500 font-medium mb-0.5">已创建 Skill</div>
+                    <div class="text-sm text-ink-900 font-semibold">{{ att.name }}</div>
+                    <div class="text-xs text-ink-500 mt-1 leading-relaxed">{{ att.description }}</div>
+                  </div>
+                </div>
+              </template>
+              <!-- File attachments -->
+              <div class="flex flex-wrap gap-3">
+              <template v-for="(att, i) in m.attachments" :key="'file-' + i">
+                <!-- Skip creation cards -->
+                <template v-if="att.type !== 'page_created' && att.type !== 'skill_created'">
                 <!-- Image preview (skip if too large) -->
                 <div v-if="isImage(att) && canPreview(att)" class="group relative">
                   <img
@@ -133,6 +164,8 @@
                   </a>
                 </div>
               </template>
+              </template>
+              </div>
             </div>
           </div>
         </div>
@@ -229,6 +262,11 @@
 
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+
+const appUrl = ref(`http://${location.hostname}:5174`)
+fetch('/api/config').then(r => r.json()).then(d => {
+  if (d.appExternalUrl) appUrl.value = d.appExternalUrl
+}).catch(() => {})
 
 const props = defineProps({
   conversationId: String,
