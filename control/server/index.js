@@ -23,7 +23,7 @@ const app = express();
 const server = createServer(app);
 const PORT = 3000;
 
-const requestQueue = new PQueue({ concurrency: 1 });
+const requestQueue = new PQueue({ concurrency: 3 });
 
 // 已被用户中断的对话 ID 集合（用于跳过队列中等待的任务）
 const abortedConversations = new Set();

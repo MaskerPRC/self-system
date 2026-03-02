@@ -22,10 +22,36 @@
       :isProcessing="isProcessing"
       :chatTitle="currentTitle"
       :todoContent="todoContent"
-      @send="sendMessage"
+      @send="handleSend"
       @cancel="cancelTask"
       @toggle-sidebar="showSidebar = !showSidebar"
     />
+
+    <!-- 并行任务确认弹窗 -->
+    <div v-if="parallelConfirm" class="fixed inset-0 bg-ink-900/20 backdrop-blur-[2px] z-50 flex items-center justify-center p-4" @click.self="cancelParallel">
+      <div class="bg-paper rounded-3xl shadow-xl border border-stone-200 w-full max-w-sm overflow-hidden animate-fade-in-up">
+        <div class="px-6 pt-5 pb-3">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center text-amber-500">
+              <i class="ph-duotone ph-warning text-lg"></i>
+            </div>
+            <h4 class="font-serif font-medium text-ink-900">并行执行确认</h4>
+          </div>
+          <p class="text-sm text-ink-600 mb-3">当前有任务正在运行，确定要并行执行吗？</p>
+          <div class="space-y-1.5 mb-1">
+            <div v-for="t in runningTasks" :key="t.id"
+              class="flex items-center gap-2 text-xs bg-surface rounded-xl px-3 py-2 border border-stone-100">
+              <i class="ph-duotone ph-circle-notch animate-spin text-brand-500 shrink-0"></i>
+              <span class="text-ink-700 truncate">{{ t.title }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex border-t border-stone-100">
+          <button @click="cancelParallel" class="flex-1 py-3.5 text-sm text-ink-500 hover:bg-stone-50 transition-colors font-medium">取消</button>
+          <button @click="confirmParallel" class="flex-1 py-3.5 text-sm text-brand-600 hover:bg-brand-50 transition-colors font-medium border-l border-stone-100">确认并行</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -47,6 +73,19 @@ const queuedList = ref([])
 const unreadSet = ref(new Set())
 const todoContent = ref(null)
 let todoTimer = null
+
+// 并行确认弹窗
+const parallelConfirm = ref(false)
+let pendingPayload = null
+
+const runningTasks = computed(() => {
+  return processingList.value
+    .filter(id => id !== activeId.value)
+    .map(id => {
+      const conv = conversations.value.find(c => c.id === id)
+      return { id, title: conv ? conv.title : '未知对话' }
+    })
+})
 
 const currentTitle = computed(() => {
   if (!activeId.value) return '选择一个对话'
@@ -154,6 +193,30 @@ async function sendMessage(payload) {
       attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined
     })
   })
+}
+
+// 发送前检查是否需要并行确认
+function handleSend(payload) {
+  const otherRunning = processingList.value.filter(id => id !== activeId.value)
+  if (otherRunning.length > 0) {
+    pendingPayload = payload
+    parallelConfirm.value = true
+    return
+  }
+  sendMessage(payload)
+}
+
+function confirmParallel() {
+  parallelConfirm.value = false
+  if (pendingPayload) {
+    sendMessage(pendingPayload)
+    pendingPayload = null
+  }
+}
+
+function cancelParallel() {
+  parallelConfirm.value = false
+  pendingPayload = null
 }
 
 async function cancelTask() {
