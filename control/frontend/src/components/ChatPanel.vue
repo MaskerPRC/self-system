@@ -176,22 +176,24 @@
     <div class="absolute bottom-24 left-0 right-0 px-4 sm:px-10 flex justify-center pointer-events-none">
       <div v-if="conversationId" class="w-full max-w-3xl flex items-end gap-2">
 
-        <!-- Paste-as-file zone: 可聚焦的隐形输入区，粘贴文本自动转为文件 -->
+        <!-- Paste-as-file zone: 输入/粘贴文本，点击输入框时自动转为文件 -->
         <div
           class="pointer-events-auto shrink-0 w-11 h-11 rounded-2xl border relative transition-all duration-200 cursor-text"
-          :class="isPasteFocused
-            ? 'bg-brand-50 border-brand-300 text-brand-500 shadow-md'
-            : 'bg-paper border-stone-200 text-ink-300 hover:text-ink-400 hover:border-stone-300'"
-          title="点击后粘贴文本 → 生成文件"
+          :class="pasteZoneText
+            ? 'bg-brand-50 border-brand-400 text-brand-500 shadow-md'
+            : isPasteFocused
+              ? 'bg-brand-50 border-brand-300 text-brand-500 shadow-md'
+              : 'bg-paper border-stone-200 text-ink-300 hover:text-ink-400 hover:border-stone-300'"
+          title="粘贴文本后点击输入框 → 自动生成文件"
           @click="pasteInputRef?.focus()"
         >
           <i class="ph ph-clipboard-text text-lg absolute inset-0 flex items-center justify-center pointer-events-none"></i>
+          <div v-if="pasteZoneText" class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-brand-500 rounded-full border-2 border-paper pointer-events-none"></div>
           <textarea
             ref="pasteInputRef"
+            v-model="pasteZoneText"
             @focus="isPasteFocused = true"
             @blur="isPasteFocused = false"
-            @paste.prevent="onPasteAsFile"
-            @input="clearPasteInput"
             class="absolute inset-0 w-full h-full opacity-0 cursor-text resize-none rounded-2xl"
           ></textarea>
         </div>
@@ -229,6 +231,7 @@
             v-model="text"
             @keydown.enter.exact.prevent="send"
             @paste="onPaste"
+            @focus="onMainInputFocus"
             :disabled="isProcessing"
             rows="1"
             class="w-full bg-transparent border-0 outline-none resize-none py-4 pl-14 pr-14 text-ink-900 placeholder-ink-400 max-h-[160px] disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
@@ -291,6 +294,7 @@ const pendingFiles = ref([])
 const isDragging = ref(false)
 const isPasteFocused = ref(false)
 const pasteInputRef = ref(null)
+const pasteZoneText = ref('')
 
 function send() {
   if (props.isProcessing) return
@@ -339,20 +343,15 @@ function onPaste(e) {
   }
 }
 
-// 粘贴区域：粘贴的文本直接转为 .txt 文件
-function onPasteAsFile(e) {
-  const clipText = e.clipboardData?.getData('text/plain')
-  if (!clipText) return
+// 点击主输入框时，如果粘贴区有内容，自动转为文件
+function onMainInputFocus() {
+  if (!pasteZoneText.value) return
   const remaining = 10 - pendingFiles.value.length
   if (remaining <= 0) return
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const file = new File([clipText], `paste-${ts}.txt`, { type: 'text/plain' })
+  const file = new File([pasteZoneText.value], `paste-${ts}.txt`, { type: 'text/plain' })
   pendingFiles.value.push(file)
-}
-
-// 防止用户手动输入文字残留在隐形 textarea
-function clearPasteInput() {
-  if (pasteInputRef.value) pasteInputRef.value.value = ''
+  pasteZoneText.value = ''
 }
 
 function removeFile(index) {
