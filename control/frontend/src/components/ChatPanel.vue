@@ -203,18 +203,31 @@
             <i class="ph-bold ph-arrow-up text-lg"></i>
           </button>
 
-          <!-- Processing Indicator -->
-          <div v-if="isProcessing" class="absolute -top-12 left-1/2 transform -translate-x-1/2 flex items-center gap-2 px-4 py-2 bg-paper border border-stone-200 shadow-subtle rounded-full text-xs text-ink-600 font-medium">
-            <i class="ph-duotone ph-circle-notch animate-spin text-brand-500"></i>
-            <span class="font-serif italic">Claude 正在思考</span>
-            <div class="flex gap-1 ml-1">
-              <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
-              <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
-              <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
+          <!-- Processing Indicator + TODO Progress -->
+          <div v-if="isProcessing" class="absolute left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-auto"
+            :style="{ bottom: todoItems.length ? '52px' : '48px' }">
+            <!-- TODO 进度列表 -->
+            <div v-if="todoItems.length" class="w-64 bg-paper border border-stone-200 shadow-subtle rounded-2xl px-4 py-3 text-xs">
+              <div v-for="(item, i) in todoItems" :key="i"
+                class="flex items-start gap-2 py-0.5"
+                :class="item.done ? 'text-ink-300' : 'text-ink-700'">
+                <i :class="item.done ? 'ph-fill ph-check-circle text-brand-400' : 'ph ph-circle-dashed text-ink-300 animate-pulse'" class="text-sm mt-0.5 shrink-0"></i>
+                <span :class="item.done ? 'line-through' : ''">{{ item.text }}</span>
+              </div>
             </div>
-            <button @click="emit('cancel')" class="ml-2 w-6 h-6 flex items-center justify-center text-ink-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors" title="中断任务">
-              <i class="ph-bold ph-stop text-xs"></i>
-            </button>
+            <!-- 思考状态栏 -->
+            <div class="flex items-center gap-2 px-4 py-2 bg-paper border border-stone-200 shadow-subtle rounded-full text-xs text-ink-600 font-medium">
+              <i class="ph-duotone ph-circle-notch animate-spin text-brand-500"></i>
+              <span class="font-serif italic">Claude 正在思考</span>
+              <div class="flex gap-1 ml-1">
+                <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
+                <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
+                <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
+              </div>
+              <button @click="emit('cancel')" class="ml-2 w-6 h-6 flex items-center justify-center text-ink-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors" title="中断任务">
+                <i class="ph-bold ph-stop text-xs"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -224,7 +237,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 
 const appUrl = ref(`http://${location.hostname}:5174`)
 fetch('/api/config').then(r => r.json()).then(d => {
@@ -235,7 +248,8 @@ const props = defineProps({
   conversationId: String,
   messages: Array,
   isProcessing: Boolean,
-  chatTitle: { type: String, default: '选择一个对话' }
+  chatTitle: { type: String, default: '选择一个对话' },
+  todoContent: { type: String, default: null }
 })
 const emit = defineEmits(['send', 'toggle-sidebar', 'cancel'])
 
@@ -248,6 +262,18 @@ const isDragging = ref(false)
 const isPasteFocused = ref(false)
 const pasteInputRef = ref(null)
 const pasteZoneText = ref('')
+
+// 解析 TODO.md 内容为任务列表
+const todoItems = computed(() => {
+  if (!props.todoContent) return []
+  return props.todoContent.split('\n')
+    .map(line => line.trim())
+    .filter(line => line.startsWith('- ['))
+    .map(line => ({
+      done: line.startsWith('- [x]') || line.startsWith('- [X]'),
+      text: line.replace(/^- \[[ xX]\]\s*/, '')
+    }))
+})
 
 function send() {
   if (props.isProcessing) return

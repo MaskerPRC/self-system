@@ -451,6 +451,19 @@ app.post('/api/conversations/:id/upload', (req, res) => {
   });
 });
 
+// 读取对话的 TODO 进度文件
+app.get('/api/conversations/:id/todo', (req, res) => {
+  const projectRoot = pathResolve(__dirname, '../..');
+  const todoPath = pathResolve(projectRoot, 'app', 'temp', req.params.id, '.TODO.md');
+  if (!existsSync(todoPath)) return res.json({ success: true, content: null });
+  try {
+    const content = readFileSync(todoPath, 'utf8');
+    res.json({ success: true, content });
+  } catch {
+    res.json({ success: true, content: null });
+  }
+});
+
 // 聊天文件下载（用户上传 + 助手生成的附件）
 app.get('/api/conversations/:id/files/download', (req, res) => {
   const conversationId = req.params.id;

@@ -21,6 +21,7 @@
       :messages="messages"
       :isProcessing="isProcessing"
       :chatTitle="currentTitle"
+      :todoContent="todoContent"
       @send="sendMessage"
       @cancel="cancelTask"
       @toggle-sidebar="showSidebar = !showSidebar"
@@ -44,6 +45,8 @@ let ws = null
 const processingList = ref([])
 const queuedList = ref([])
 const unreadSet = ref(new Set())
+const todoContent = ref(null)
+let todoTimer = null
 
 const currentTitle = computed(() => {
   if (!activeId.value) return '选择一个对话'
@@ -254,6 +257,34 @@ watch(activeId, (id) => {
   fetchMessages(id)
   isProcessing.value = id ? processingList.value.includes(id) : false
 })
+
+// TODO 进度轮询
+async function fetchTodo() {
+  if (!activeId.value) return
+  try {
+    const r = await fetch(`${API}/api/conversations/${activeId.value}/todo`)
+    const d = await r.json()
+    todoContent.value = d.content || null
+  } catch {
+    todoContent.value = null
+  }
+}
+
+function startTodoPoll() {
+  stopTodoPoll()
+  fetchTodo()
+  todoTimer = setInterval(fetchTodo, 3000)
+}
+
+function stopTodoPoll() {
+  if (todoTimer) { clearInterval(todoTimer); todoTimer = null }
+  todoContent.value = null
+}
+
+watch(isProcessing, (val) => {
+  if (val) startTodoPoll()
+  else stopTodoPoll()
+})
 onMounted(() => {
   fetchConvs()
   connectWs()
@@ -261,6 +292,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   if (ws) ws.close()
+  stopTodoPoll()
   window.removeEventListener('switch-conversation', onSwitchConversation)
 })
 </script>
