@@ -305,7 +305,9 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
         const responseText = extractResponse(result.stdout);
         if (responseText) {
           let responseFiles = extractFileInfo(result.stdout);
-          if (responseFiles.length === 0) responseFiles = scanNewFiles(tempDir, existingTempFiles, conversationId);
+          // 合并 scanNewFiles 结果，确保不遗漏文件
+          const scannedFiles = scanNewFiles(tempDir, existingTempFiles, conversationId);
+          responseFiles = mergeFileAttachments(responseFiles, scannedFiles);
           const responseAttachments = [...responseFiles];
           if (skillInfo) responseAttachments.push({ type: 'skill_created', name: skillInfo.name, description: skillInfo.description });
           const insertData = { conversation_id: conversationId, role: 'assistant', content: responseText };
@@ -370,7 +372,9 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
         // 4. 保存助手回复（包含 Claude 的自然语言描述）
         const naturalText = extractNaturalText(result.stdout);
         let fileAttachments = extractFileInfo(result.stdout);
-        if (fileAttachments.length === 0) fileAttachments = scanNewFiles(tempDir, existingTempFiles, conversationId);
+        // 合并 scanNewFiles 结果，确保不遗漏文件
+        const scannedFiles2 = scanNewFiles(tempDir, existingTempFiles, conversationId);
+        fileAttachments = mergeFileAttachments(fileAttachments, scannedFiles2);
         const reply = naturalText || '需求处理完成';
 
         const allAttachments = [...fileAttachments];
@@ -452,7 +456,7 @@ app.get('/api/conversations/:id/files/download', (req, res) => {
   const conversationId = req.params.id;
   const fileName = req.query.name;
 
-  if (!fileName || fileName.includes('..') || fileName.includes('/') || fileName.includes('\\')) {
+  if (!fileName || fileName.includes('..')) {
     return res.status(400).json({ success: false, error: '非法文件名' });
   }
 
@@ -464,7 +468,8 @@ app.get('/api/conversations/:id/files/download', (req, res) => {
     return res.status(404).json({ success: false, error: '文件不存在' });
   }
 
-  res.download(filePath, fileName);
+  const baseName = fileName.split('/').pop() || fileName;
+  res.download(filePath, baseName);
 });
 
 // 聊天文件预览（inline 展示图片/视频/音频）
@@ -472,7 +477,7 @@ app.get('/api/conversations/:id/files/preview', (req, res) => {
   const conversationId = req.params.id;
   const fileName = req.query.name;
 
-  if (!fileName || fileName.includes('..') || fileName.includes('/') || fileName.includes('\\')) {
+  if (!fileName || fileName.includes('..')) {
     return res.status(400).json({ success: false, error: '非法文件名' });
   }
 
@@ -1063,27 +1068,13 @@ function guessMimeType(fileName) {
 
 /**
  * 扫描 temp 目录中新增的文件（Claude 运行前不存在的文件）
- * 作为 [FILE_INFO] 标记的 fallback
+ * 递归扫描子目录，确保嵌套目录中的文件也能被发现
  */
 function scanNewFiles(tempDir, existingFiles, conversationId) {
   const files = [];
   try {
     if (!existsSync(tempDir)) return files;
-    const currentFiles = readdirSync(tempDir);
-    for (const name of currentFiles) {
-      if (existingFiles.has(name)) continue; // 跳过已有文件
-      try {
-        const fullPath = pathResolve(tempDir, name);
-        const stat = statSync(fullPath);
-        if (!stat.isFile()) continue;
-        files.push({
-          name,
-          path: `app/temp/${conversationId}/${name}`,
-          size: stat.size,
-          type: guessMimeType(name)
-        });
-      } catch {}
-    }
+    scanDir(tempDir, '');
   } catch (e) {
     console.warn('[scanNewFiles] 扫描失败:', e.message);
   }
@@ -1091,6 +1082,45 @@ function scanNewFiles(tempDir, existingFiles, conversationId) {
     console.log(`[scanNewFiles] 发现 ${files.length} 个新文件:`, files.map(f => f.name).join(', '));
   }
   return files;
+
+  function scanDir(dir, relPrefix) {
+    const entries = readdirSync(dir);
+    for (const name of entries) {
+      const relName = relPrefix ? `${relPrefix}/${name}` : name;
+      // 顶层文件跳过已有的
+      if (!relPrefix && existingFiles.has(name)) continue;
+      try {
+        const fullPath = pathResolve(dir, name);
+        const stat = statSync(fullPath);
+        if (stat.isDirectory()) {
+          scanDir(fullPath, relName);
+        } else if (stat.isFile()) {
+          files.push({
+            name,
+            path: `app/temp/${conversationId}/${relName}`,
+            size: stat.size,
+            type: guessMimeType(name)
+          });
+        }
+      } catch {}
+    }
+  }
+}
+
+/**
+ * 合并 extractFileInfo 和 scanNewFiles 的结果，按 path 去重
+ */
+function mergeFileAttachments(tagFiles, scannedFiles) {
+  if (scannedFiles.length === 0) return tagFiles;
+  if (tagFiles.length === 0) return scannedFiles;
+  const seen = new Set(tagFiles.map(f => f.path));
+  const merged = [...tagFiles];
+  for (const f of scannedFiles) {
+    if (!seen.has(f.path)) {
+      merged.push(f);
+    }
+  }
+  return merged;
 }
 
 /**
