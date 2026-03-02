@@ -141,76 +141,94 @@
 
     <!-- Floating Input Area -->
     <div class="absolute bottom-24 left-0 right-0 px-4 sm:px-10 flex justify-center pointer-events-none">
-      <div v-if="conversationId"
-        class="w-full max-w-3xl relative bg-paper rounded-3xl border border-stone-200 shadow-float focus-within:border-stone-300 focus-within:shadow-xl transition-all duration-300 pointer-events-auto"
-        @dragover.prevent="isDragging = true"
-        @dragleave.prevent="isDragging = false"
-        @drop.prevent="onDrop">
+      <div v-if="conversationId" class="w-full max-w-3xl flex items-end gap-2">
 
-        <!-- Drag overlay -->
-        <div v-if="isDragging" class="absolute inset-0 rounded-3xl bg-brand-50/80 border-2 border-dashed border-brand-300 z-10 flex items-center justify-center">
-          <span class="text-brand-600 text-sm font-medium">释放以添加文件</span>
+        <!-- Paste-as-file zone -->
+        <div
+          @mouseenter="isPasteHovered = true"
+          @mouseleave="isPasteHovered = false"
+          class="pointer-events-auto shrink-0 w-11 h-11 rounded-2xl border flex items-center justify-center transition-all duration-200 cursor-default select-none"
+          :class="isPasteHovered
+            ? 'bg-brand-50 border-brand-300 text-brand-500 shadow-md scale-105'
+            : 'bg-paper border-stone-200 text-ink-300 hover:text-ink-400 hover:border-stone-300'"
+          :title="isPasteHovered ? '现在粘贴文本将生成文件' : '悬停后粘贴文本 → 生成文件'"
+        >
+          <i class="ph ph-clipboard-text text-lg"></i>
         </div>
 
-        <!-- Pending files preview -->
-        <div v-if="pendingFiles.length" class="flex flex-wrap gap-2 px-5 pt-3 pb-1">
-          <div v-for="(f, i) in pendingFiles" :key="i"
-            class="flex items-center gap-1.5 bg-stone-100 rounded-xl px-3 py-1.5 text-xs text-ink-700">
-            <i :class="fileIcon(f)" class="text-sm text-ink-400"></i>
-            <span class="max-w-[120px] truncate">{{ f.name }}</span>
-            <span class="text-ink-400">({{ formatSize(f.size) }})</span>
-            <button @click="removeFile(i)" class="text-ink-300 hover:text-red-500 transition-colors ml-0.5">
-              <i class="ph ph-x text-xs"></i>
+        <!-- Input container -->
+        <div
+          class="flex-1 relative bg-paper rounded-3xl border border-stone-200 shadow-float focus-within:border-stone-300 focus-within:shadow-xl transition-all duration-300 pointer-events-auto"
+          @dragover.prevent="isDragging = true"
+          @dragleave.prevent="isDragging = false"
+          @drop.prevent="onDrop">
+
+          <!-- Drag overlay -->
+          <div v-if="isDragging" class="absolute inset-0 rounded-3xl bg-brand-50/80 border-2 border-dashed border-brand-300 z-10 flex items-center justify-center">
+            <span class="text-brand-600 text-sm font-medium">释放以添加文件</span>
+          </div>
+
+          <!-- Pending files preview -->
+          <div v-if="pendingFiles.length" class="flex flex-wrap gap-2 px-5 pt-3 pb-1">
+            <div v-for="(f, i) in pendingFiles" :key="i"
+              class="flex items-center gap-1.5 bg-stone-100 rounded-xl px-3 py-1.5 text-xs text-ink-700">
+              <i :class="fileIcon(f)" class="text-sm text-ink-400"></i>
+              <span class="max-w-[120px] truncate">{{ f.name }}</span>
+              <span class="text-ink-400">({{ formatSize(f.size) }})</span>
+              <button @click="removeFile(i)" class="text-ink-300 hover:text-red-500 transition-colors ml-0.5">
+                <i class="ph ph-x text-xs"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Hidden file input -->
+          <input ref="fileInputRef" type="file" multiple class="hidden" @change="onFilesSelected" />
+
+          <textarea
+            ref="inputRef"
+            v-model="text"
+            @keydown.enter.exact.prevent="send"
+            @paste="onPaste"
+            :disabled="isProcessing"
+            rows="1"
+            class="w-full bg-transparent border-0 outline-none resize-none py-4 pl-14 pr-14 text-ink-900 placeholder-ink-400 max-h-[160px] disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
+            placeholder="输入需求..."
+          ></textarea>
+
+          <!-- Attach button -->
+          <button @click="fileInputRef?.click()" :disabled="isProcessing"
+            class="absolute left-2 bottom-2 w-10 h-10 flex items-center justify-center text-ink-400 hover:text-brand-500 rounded-full hover:bg-stone-100 disabled:opacity-50 transition-colors">
+            <i class="ph ph-paperclip text-lg"></i>
+          </button>
+
+          <!-- Send button -->
+          <button @click="send" :disabled="(!text.trim() && !pendingFiles.length) || isProcessing"
+            class="absolute right-2 bottom-2 w-10 h-10 flex items-center justify-center bg-brand-500 text-white rounded-full hover:bg-brand-600 disabled:bg-stone-100 disabled:text-stone-400 transition-colors">
+            <i class="ph-bold ph-arrow-up text-lg"></i>
+          </button>
+
+          <!-- Processing Indicator -->
+          <div v-if="isProcessing" class="absolute -top-12 left-1/2 transform -translate-x-1/2 flex items-center gap-2 px-4 py-2 bg-paper border border-stone-200 shadow-subtle rounded-full text-xs text-ink-600 font-medium">
+            <i class="ph-duotone ph-circle-notch animate-spin text-brand-500"></i>
+            <span class="font-serif italic">Claude 正在思考</span>
+            <div class="flex gap-1 ml-1">
+              <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
+              <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
+              <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
+            </div>
+            <button @click="emit('cancel')" class="ml-2 w-6 h-6 flex items-center justify-center text-ink-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors" title="中断任务">
+              <i class="ph-bold ph-stop text-xs"></i>
             </button>
           </div>
         </div>
 
-        <!-- Hidden file input -->
-        <input ref="fileInputRef" type="file" multiple class="hidden" @change="onFilesSelected" />
-
-        <textarea
-          ref="inputRef"
-          v-model="text"
-          @keydown.enter.exact.prevent="send"
-          @paste="onPaste"
-          :disabled="isProcessing"
-          rows="1"
-          class="w-full bg-transparent border-0 outline-none resize-none py-4 pl-14 pr-14 text-ink-900 placeholder-ink-400 max-h-[160px] disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
-          placeholder="输入需求..."
-        ></textarea>
-
-        <!-- Attach button -->
-        <button @click="fileInputRef?.click()" :disabled="isProcessing"
-          class="absolute left-2 bottom-2 w-10 h-10 flex items-center justify-center text-ink-400 hover:text-brand-500 rounded-full hover:bg-stone-100 disabled:opacity-50 transition-colors">
-          <i class="ph ph-paperclip text-lg"></i>
-        </button>
-
-        <!-- Send button -->
-        <button @click="send" :disabled="(!text.trim() && !pendingFiles.length) || isProcessing"
-          class="absolute right-2 bottom-2 w-10 h-10 flex items-center justify-center bg-brand-500 text-white rounded-full hover:bg-brand-600 disabled:bg-stone-100 disabled:text-stone-400 transition-colors">
-          <i class="ph-bold ph-arrow-up text-lg"></i>
-        </button>
-
-        <!-- Processing Indicator -->
-        <div v-if="isProcessing" class="absolute -top-12 left-1/2 transform -translate-x-1/2 flex items-center gap-2 px-4 py-2 bg-paper border border-stone-200 shadow-subtle rounded-full text-xs text-ink-600 font-medium">
-          <i class="ph-duotone ph-circle-notch animate-spin text-brand-500"></i>
-          <span class="font-serif italic">Claude 正在思考</span>
-          <div class="flex gap-1 ml-1">
-            <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
-            <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
-            <div class="w-1.5 h-1.5 rounded-full bg-brand-300 typing-dot"></div>
-          </div>
-          <button @click="emit('cancel')" class="ml-2 w-6 h-6 flex items-center justify-center text-ink-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors" title="中断任务">
-            <i class="ph-bold ph-stop text-xs"></i>
-          </button>
-        </div>
       </div>
     </div>
   </section>
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   conversationId: String,
@@ -226,6 +244,7 @@ const inputRef = ref(null)
 const fileInputRef = ref(null)
 const pendingFiles = ref([])
 const isDragging = ref(false)
+const isPasteHovered = ref(false)
 
 function send() {
   if (props.isProcessing) return
@@ -251,6 +270,15 @@ function onDrop(e) {
 }
 
 function onPaste(e) {
+  // 如果鼠标悬停在粘贴区域，将文本转为文件
+  if (isPasteHovered.value) {
+    const clipText = e.clipboardData?.getData('text/plain')
+    if (clipText) {
+      e.preventDefault()
+      addTextAsFile(clipText)
+      return
+    }
+  }
   const items = e.clipboardData?.items
   if (!items) return
   const files = []
@@ -273,6 +301,31 @@ function onPaste(e) {
     pendingFiles.value.push(...files.slice(0, remaining))
   }
 }
+
+// 将粘贴的文本转为 .txt 文件
+function addTextAsFile(clipText) {
+  const remaining = 10 - pendingFiles.value.length
+  if (remaining <= 0) return
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const file = new File([clipText], `paste-${ts}.txt`, { type: 'text/plain' })
+  pendingFiles.value.push(file)
+}
+
+// document 级粘贴监听：当焦点不在 textarea 时也能响应
+function onDocumentPaste(e) {
+  if (!isPasteHovered.value) return
+  const clipText = e.clipboardData?.getData('text/plain')
+  if (!clipText) return
+  e.preventDefault()
+  addTextAsFile(clipText)
+}
+
+onMounted(() => {
+  document.addEventListener('paste', onDocumentPaste)
+})
+onUnmounted(() => {
+  document.removeEventListener('paste', onDocumentPaste)
+})
 
 function removeFile(index) {
   pendingFiles.value.splice(index, 1)
