@@ -194,7 +194,7 @@
             v-model="pasteZoneText"
             @focus="isPasteFocused = true"
             @blur="isPasteFocused = false"
-            class="absolute inset-0 w-full h-full opacity-0 cursor-text resize-none rounded-2xl"
+            class="absolute inset-0 w-full h-full bg-transparent text-transparent caret-transparent cursor-text resize-none rounded-2xl selection:bg-transparent"
           ></textarea>
         </div>
 
