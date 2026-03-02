@@ -104,55 +104,8 @@
               <template v-for="(att, i) in m.attachments" :key="'file-' + i">
                 <!-- Skip creation cards -->
                 <template v-if="att.type !== 'page_created' && att.type !== 'skill_created'">
-                <!-- Image preview (skip if too large) -->
-                <div v-if="isImage(att) && canPreview(att)" class="group relative">
-                  <img
-                    :src="previewUrl(att)"
-                    :alt="att.name"
-                    class="max-w-[200px] max-h-[200px] object-cover rounded-xl border border-stone-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                    @click="openFullImage(att)"
-                    loading="lazy"
-                  />
-                  <div class="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <a :href="downloadUrl(att)" :download="att.name"
-                       class="w-8 h-8 flex items-center justify-center bg-paper/90 rounded-full shadow-sm hover:bg-paper text-ink-600">
-                      <i class="ph ph-download-simple text-sm"></i>
-                    </a>
-                  </div>
-                  <div class="text-xs text-ink-400 mt-1 max-w-[200px] truncate">{{ att.name }}</div>
-                </div>
-
-                <!-- Video player (skip if too large) - full width -->
-                <div v-else-if="isVideo(att) && canPreview(att)" class="w-full max-w-xs sm:max-w-md">
-                  <video :src="previewUrl(att)" controls preload="metadata"
-                    class="w-full rounded-xl border border-stone-200 shadow-sm"></video>
-                  <div class="flex items-center justify-between mt-1">
-                    <span class="text-xs text-ink-400">{{ att.name }} ({{ formatSize(att.size) }})</span>
-                    <a :href="downloadUrl(att)" :download="att.name"
-                       class="text-xs text-brand-500 hover:text-brand-600 flex items-center gap-1">
-                      <i class="ph ph-download-simple"></i> 下载
-                    </a>
-                  </div>
-                </div>
-
-                <!-- Audio player (skip if too large) - full width -->
-                <div v-else-if="isAudio(att) && canPreview(att)" class="w-full max-w-xs sm:max-w-md">
-                  <div class="flex items-center gap-3 bg-stone-50 rounded-xl px-4 py-3 border border-stone-200">
-                    <i class="ph-duotone ph-music-note text-2xl text-brand-500 shrink-0"></i>
-                    <div class="flex-1 min-w-0">
-                      <div class="text-sm text-ink-800 truncate">{{ att.name }}</div>
-                      <div class="text-xs text-ink-400">{{ formatSize(att.size) }}</div>
-                      <audio :src="previewUrl(att)" controls preload="metadata" class="w-full mt-2 h-8"></audio>
-                    </div>
-                    <a :href="downloadUrl(att)" :download="att.name"
-                       class="w-8 h-8 flex items-center justify-center text-ink-400 hover:text-brand-500 rounded-full hover:bg-stone-100 shrink-0">
-                      <i class="ph ph-download-simple"></i>
-                    </a>
-                  </div>
-                </div>
-
-                <!-- Generic file card (fallback for all other files + oversized media) -->
-                <div v-else class="flex items-center gap-3 bg-stone-50 rounded-xl px-3 py-2.5 border border-stone-200">
+                <!-- Generic file card for all files -->
+                <div class="flex items-center gap-3 bg-stone-50 rounded-xl px-3 py-2.5 border border-stone-200">
                   <i :class="attIcon(att)" class="text-xl shrink-0"></i>
                   <div class="min-w-0">
                     <div class="text-sm text-ink-800 truncate max-w-[140px]">{{ att.name }}</div>
@@ -375,33 +328,6 @@ function attIcon(att) {
   return 'ph-duotone ph-file text-ink-400'
 }
 
-function isImage(att) {
-  return att.type?.startsWith('image/')
-}
-
-function isVideo(att) {
-  return att.type?.startsWith('video/')
-}
-
-function isAudio(att) {
-  return att.type?.startsWith('audio/')
-}
-
-// 只有媒体文件（图片/视频/音频）支持 inline 预览
-function canPreview(att) {
-  return isImage(att) || isVideo(att) || isAudio(att)
-}
-
-function previewUrl(att) {
-  const parts = att.path?.split('/')
-  if (parts?.length >= 4 && parts[0] === 'app' && parts[1] === 'temp') {
-    const convId = parts[2]
-    const fileName = parts.slice(3).join('/')
-    return `/api/conversations/${convId}/files/preview?name=${encodeURIComponent(fileName)}`
-  }
-  return ''
-}
-
 function downloadUrl(att) {
   const parts = att.path?.split('/')
   if (parts?.length >= 4 && parts[0] === 'app' && parts[1] === 'temp') {
@@ -410,10 +336,6 @@ function downloadUrl(att) {
     return `/api/conversations/${convId}/files/download?name=${encodeURIComponent(fileName)}`
   }
   return ''
-}
-
-function openFullImage(att) {
-  window.open(previewUrl(att), '_blank')
 }
 
 function formatSize(bytes) {
