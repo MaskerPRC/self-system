@@ -176,17 +176,24 @@
     <div class="absolute bottom-24 left-0 right-0 px-4 sm:px-10 flex justify-center pointer-events-none">
       <div v-if="conversationId" class="w-full max-w-3xl flex items-end gap-2">
 
-        <!-- Paste-as-file zone -->
+        <!-- Paste-as-file zone: 可聚焦的隐形输入区，粘贴文本自动转为文件 -->
         <div
-          @mouseenter="isPasteHovered = true"
-          @mouseleave="isPasteHovered = false"
-          class="pointer-events-auto shrink-0 w-11 h-11 rounded-2xl border flex items-center justify-center transition-all duration-200 cursor-default select-none"
-          :class="isPasteHovered
-            ? 'bg-brand-50 border-brand-300 text-brand-500 shadow-md scale-105'
+          class="pointer-events-auto shrink-0 w-11 h-11 rounded-2xl border relative transition-all duration-200 cursor-text"
+          :class="isPasteFocused
+            ? 'bg-brand-50 border-brand-300 text-brand-500 shadow-md'
             : 'bg-paper border-stone-200 text-ink-300 hover:text-ink-400 hover:border-stone-300'"
-          :title="isPasteHovered ? '现在粘贴文本将生成文件' : '悬停后粘贴文本 → 生成文件'"
+          title="点击后粘贴文本 → 生成文件"
+          @click="pasteInputRef?.focus()"
         >
-          <i class="ph ph-clipboard-text text-lg"></i>
+          <i class="ph ph-clipboard-text text-lg absolute inset-0 flex items-center justify-center pointer-events-none"></i>
+          <textarea
+            ref="pasteInputRef"
+            @focus="isPasteFocused = true"
+            @blur="isPasteFocused = false"
+            @paste.prevent="onPasteAsFile"
+            @input="clearPasteInput"
+            class="absolute inset-0 w-full h-full opacity-0 cursor-text resize-none rounded-2xl"
+          ></textarea>
         </div>
 
         <!-- Input container -->
@@ -261,7 +268,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 
 const appUrl = ref(`http://${location.hostname}:5174`)
 fetch('/api/config').then(r => r.json()).then(d => {
@@ -282,7 +289,8 @@ const inputRef = ref(null)
 const fileInputRef = ref(null)
 const pendingFiles = ref([])
 const isDragging = ref(false)
-const isPasteHovered = ref(false)
+const isPasteFocused = ref(false)
+const pasteInputRef = ref(null)
 
 function send() {
   if (props.isProcessing) return
@@ -308,15 +316,6 @@ function onDrop(e) {
 }
 
 function onPaste(e) {
-  // 如果鼠标悬停在粘贴区域，将文本转为文件
-  if (isPasteHovered.value) {
-    const clipText = e.clipboardData?.getData('text/plain')
-    if (clipText) {
-      e.preventDefault()
-      addTextAsFile(clipText)
-      return
-    }
-  }
   const items = e.clipboardData?.items
   if (!items) return
   const files = []
@@ -340,8 +339,10 @@ function onPaste(e) {
   }
 }
 
-// 将粘贴的文本转为 .txt 文件
-function addTextAsFile(clipText) {
+// 粘贴区域：粘贴的文本直接转为 .txt 文件
+function onPasteAsFile(e) {
+  const clipText = e.clipboardData?.getData('text/plain')
+  if (!clipText) return
   const remaining = 10 - pendingFiles.value.length
   if (remaining <= 0) return
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
@@ -349,21 +350,10 @@ function addTextAsFile(clipText) {
   pendingFiles.value.push(file)
 }
 
-// document 级粘贴监听：当焦点不在 textarea 时也能响应
-function onDocumentPaste(e) {
-  if (!isPasteHovered.value) return
-  const clipText = e.clipboardData?.getData('text/plain')
-  if (!clipText) return
-  e.preventDefault()
-  addTextAsFile(clipText)
+// 防止用户手动输入文字残留在隐形 textarea
+function clearPasteInput() {
+  if (pasteInputRef.value) pasteInputRef.value.value = ''
 }
-
-onMounted(() => {
-  document.addEventListener('paste', onDocumentPaste)
-})
-onUnmounted(() => {
-  document.removeEventListener('paste', onDocumentPaste)
-})
 
 function removeFile(index) {
   pendingFiles.value.splice(index, 1)
