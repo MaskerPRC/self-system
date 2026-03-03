@@ -204,14 +204,20 @@
 
           <!-- Processing Indicator + TODO Progress -->
           <div v-if="isProcessing" class="absolute left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-auto"
-            :style="{ bottom: todoItems.length ? '52px' : '48px' }">
+            :style="{ bottom: todoItems.length && !todoCollapsed ? '52px' : '48px' }">
             <!-- TODO 进度列表 -->
-            <div v-if="todoItems.length" class="w-64 bg-paper border border-stone-200 shadow-subtle rounded-2xl px-4 py-3 text-xs">
-              <div v-for="(item, i) in todoItems" :key="i"
-                class="flex items-start gap-2 py-0.5"
-                :class="item.done ? 'text-ink-300' : 'text-ink-700'">
-                <i :class="item.done ? 'ph-fill ph-check-circle text-brand-400' : 'ph ph-circle-dashed text-ink-300 animate-pulse'" class="text-sm mt-0.5 shrink-0"></i>
-                <span :class="item.done ? 'line-through' : ''">{{ item.text }}</span>
+            <div v-if="todoItems.length" class="w-64 bg-paper border border-stone-200 shadow-subtle rounded-2xl text-xs overflow-hidden">
+              <button @click="todoCollapsed = !todoCollapsed" class="w-full flex items-center justify-between px-4 py-2 hover:bg-stone-50 transition-colors">
+                <span class="text-ink-500 font-medium">进度 {{ todoItems.filter(t => t.done).length }}/{{ todoItems.length }}</span>
+                <i :class="todoCollapsed ? 'ph ph-caret-down' : 'ph ph-caret-up'" class="text-ink-400 text-xs"></i>
+              </button>
+              <div v-if="!todoCollapsed" class="px-4 pb-3 space-y-0.5">
+                <div v-for="(item, i) in todoItems" :key="i"
+                  class="flex items-start gap-2 py-0.5"
+                  :class="item.done ? 'text-ink-300' : 'text-ink-700'">
+                  <i :class="item.done ? 'ph-fill ph-check-circle text-brand-400' : 'ph ph-circle-dashed text-ink-300 animate-pulse'" class="text-sm mt-0.5 shrink-0"></i>
+                  <span :class="item.done ? 'line-through' : ''">{{ item.text }}</span>
+                </div>
               </div>
             </div>
             <!-- 思考状态栏 -->
@@ -269,6 +275,7 @@ const isDragging = ref(false)
 const isPasteFocused = ref(false)
 const pasteInputRef = ref(null)
 const pasteZoneText = ref('')
+const todoCollapsed = ref(false)
 
 // 解析 TODO.md 内容为任务列表
 const todoItems = computed(() => {
