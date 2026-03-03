@@ -893,9 +893,9 @@ app.get('/api/control/logs', async (req, res) => {
 const APP_CONTAINER = process.env.APP_CONTAINER_NAME || 'digital-avatar-app';
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-function dockerExecCmd(command) {
+function dockerExecCmd(command, maxBuffer = 2 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
-    exec(command, { timeout: 15000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+    exec(command, { timeout: 15000, maxBuffer }, (error, stdout, stderr) => {
       if (error) reject(new Error(stderr || error.message));
       else resolve(stdout);
     });
@@ -993,8 +993,17 @@ app.get('/api/app/files/download', async (req, res) => {
     if (!filePath) return res.status(400).json({ success: false, error: '非法路径' });
 
     const fileName = filePath.split('/').pop();
+
+    // 优先从本地文件系统直接读取（性能更好，无大小限制）
+    const projectRoot = pathResolve(__dirname, '../..');
+    const localPath = pathResolve(projectRoot, filePath.slice(1)); // 去掉开头的 /
+    if (localPath.startsWith(pathResolve(projectRoot, 'app')) && existsSync(localPath)) {
+      return res.download(localPath, fileName);
+    }
+
+    // 回退：通过 Docker exec 读取
     const cmd = `docker exec ${APP_CONTAINER} sh -c "cat '${filePath}' | base64"`;
-    const base64Data = (await dockerExecCmd(cmd)).replace(/\s/g, '');
+    const base64Data = (await dockerExecCmd(cmd, 50 * 1024 * 1024)).replace(/\s/g, '');
     const buffer = Buffer.from(base64Data, 'base64');
 
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
