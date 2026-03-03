@@ -16,6 +16,31 @@
 
         <!-- Content -->
         <div class="flex-1 overflow-y-auto px-6 py-5">
+          <!-- UI Style Section -->
+          <div>
+            <div class="mb-4">
+              <h3 class="font-medium text-ink-900">UI 风格</h3>
+              <p class="text-xs text-ink-500 mt-0.5">生成页面时的默认设计风格，用户在对话中指定风格时会覆盖此设置</p>
+            </div>
+            <textarea v-model="uiStyle" rows="4"
+              class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 resize-none transition-colors leading-relaxed"
+              placeholder="描述你期望的 UI 风格..."></textarea>
+            <div class="flex items-center gap-2 mt-2">
+              <button @click="saveUiStyle" :disabled="uiStyleSaving"
+                class="text-xs font-medium px-4 py-1.5 bg-brand-500 text-white rounded-full hover:bg-brand-600 disabled:opacity-40 transition-colors">
+                {{ uiStyleSaving ? '保存中...' : '保存' }}
+              </button>
+              <button @click="resetUiStyle"
+                class="text-xs font-medium px-3 py-1.5 rounded-full border border-stone-200 text-ink-500 hover:bg-stone-50 transition-colors">
+                恢复默认
+              </button>
+              <span v-if="uiStyleMessage" class="text-xs font-medium text-emerald-600 ml-1">{{ uiStyleMessage }}</span>
+            </div>
+          </div>
+
+          <!-- Divider -->
+          <div class="border-t border-stone-200 my-6"></div>
+
           <!-- Skills Section -->
           <div>
             <div class="flex items-center justify-between mb-4">
@@ -226,6 +251,11 @@ const remotePushing = ref(false)
 const remoteMessage = ref('')
 const remoteMessageError = ref(false)
 
+const DEFAULT_UI_STYLE = '现代简约风格，使用 Tailwind CSS 4。配色以白色/浅灰为主背景，搭配一个品牌强调色。圆角卡片布局，适当留白，字体清晰易读。响应式设计，移动端友好。'
+const uiStyle = ref(DEFAULT_UI_STYLE)
+const uiStyleSaving = ref(false)
+const uiStyleMessage = ref('')
+
 async function fetchSkills() {
   try {
     const r = await fetch(`${API}/api/skills`)
@@ -261,8 +291,35 @@ async function handleDelete(name) {
 }
 
 watch(() => props.visible, (v) => {
-  if (v) { fetchSkills(); fetchCommits(); fetchRemoteConfig() }
+  if (v) { fetchSkills(); fetchCommits(); fetchRemoteConfig(); fetchSettings() }
 })
+
+async function fetchSettings() {
+  try {
+    const r = await fetch(`${API}/api/settings`)
+    const d = await r.json()
+    if (d.success && d.data.uiStyle) uiStyle.value = d.data.uiStyle
+  } catch {}
+}
+
+async function saveUiStyle() {
+  uiStyleSaving.value = true
+  uiStyleMessage.value = ''
+  try {
+    const r = await fetch(`${API}/api/settings`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uiStyle: uiStyle.value })
+    })
+    const d = await r.json()
+    if (d.success) uiStyleMessage.value = '已保存'
+  } catch {}
+  uiStyleSaving.value = false
+  setTimeout(() => { uiStyleMessage.value = '' }, 2000)
+}
+
+function resetUiStyle() {
+  uiStyle.value = DEFAULT_UI_STYLE
+}
 
 async function fetchRemoteConfig() {
   try {

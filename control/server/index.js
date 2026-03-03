@@ -83,6 +83,35 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+// ==================== 设置 API ====================
+
+const settingsPath = pathResolve(__dirname, 'settings.json');
+const DEFAULT_SETTINGS = {
+  uiStyle: '现代简约风格，使用 Tailwind CSS 4。配色以白色/浅灰为主背景，搭配一个品牌强调色。圆角卡片布局，适当留白，字体清晰易读。响应式设计，移动端友好。'
+};
+
+function readSettings() {
+  try {
+    if (existsSync(settingsPath)) return JSON.parse(readFileSync(settingsPath, 'utf8'));
+  } catch {}
+  return { ...DEFAULT_SETTINGS };
+}
+
+app.get('/api/settings', (req, res) => {
+  res.json({ success: true, data: readSettings() });
+});
+
+app.post('/api/settings', async (req, res) => {
+  try {
+    const current = readSettings();
+    const merged = { ...current, ...req.body };
+    await fsWriteFile(settingsPath, JSON.stringify(merged, null, 2), 'utf8');
+    res.json({ success: true, data: merged });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ==================== 对话 API ====================
 
 app.get('/api/conversations', async (req, res) => {

@@ -158,6 +158,19 @@ export async function callClaudeCode(requirement, conversationId, history = [], 
     console.warn('[Claude] 加载 Skills 失败:', e.message);
   }
 
+  // 加载 UI 风格设置
+  let uiStyle = '';
+  try {
+    const settingsPath = pathResolve(__dirname, '../settings.json');
+    if (existsSync(settingsPath)) {
+      const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+      if (settings.uiStyle) uiStyle = settings.uiStyle;
+    }
+  } catch {}
+  if (!uiStyle) {
+    uiStyle = '现代简约风格，使用 Tailwind CSS 4。配色以白色/浅灰为主背景，搭配一个品牌强调色。圆角卡片布局，适当留白，字体清晰易读。响应式设计，移动端友好。';
+  }
+
   // 构建对话历史上下文
   let historySection = '';
   if (history.length > 0) {
@@ -210,9 +223,11 @@ ${requirement}
 4. 后端 API：如需后端接口，在 app/server/routes/ 下创建新路由文件，并在 app/server/index.js 中注册
 5. 使用 JavaScript，不使用 TypeScript
 6. 保持代码风格一致，页面要有完整 UI 和功能
-7. 如需新依赖使用 pnpm。重要：不要使用需要原生编译的 npm 包（如 better-sqlite3、sharp 等），优先使用纯 JavaScript 实现的替代方案（如 sql.js、jimp 等）
-8. 修改完成后代码应能正常运行
-9. 【严禁使用 localhost 或 127.0.0.1】前端代码中调用后端 API 时，必须使用相对路径（如 fetch('/api/xxx')），严禁写 http://localhost:3001 或 http://127.0.0.1:3001。项目通过 Vite proxy 转发 /api 请求到后端，直接用相对路径即可。错误示例：const API = import.meta.env.DEV ? 'http://localhost:3001/api/xxx' : '/api/xxx'。正确写法：const API = '/api/xxx' 或直接 fetch('/api/xxx')
+7. 【默认 UI 设计规范】除非用户在本次消息中明确指定了设计风格，否则必须遵循以下默认风格：
+   ${uiStyle}
+8. 如需新依赖使用 pnpm。重要：不要使用需要原生编译的 npm 包（如 better-sqlite3、sharp 等），优先使用纯 JavaScript 实现的替代方案（如 sql.js、jimp 等）
+9. 修改完成后代码应能正常运行
+10. 【严禁使用 localhost 或 127.0.0.1】前端代码中调用后端 API 时，必须使用相对路径（如 fetch('/api/xxx')），严禁写 http://localhost:3001 或 http://127.0.0.1:3001。项目通过 Vite proxy 转发 /api 请求到后端，直接用相对路径即可。错误示例：const API = import.meta.env.DEV ? 'http://localhost:3001/api/xxx' : '/api/xxx'。正确写法：const API = '/api/xxx' 或直接 fetch('/api/xxx')
 完成后输出：
 [PAGE_INFO]
 route: /<你添加的路由path>
