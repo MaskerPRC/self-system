@@ -276,13 +276,13 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
           } catch {}
         }
 
-        // 记录 Claude 执行前 temp 目录中已有的文件（用于后续检测新生成的文件）
+        // 记录 Claude 执行前 temp 目录中已有的文件（递归，用于后续检测新生成的文件）
         const tempDir = pathResolve(__dirname, '../../app/temp', conversationId);
         const tempRootDir = pathResolve(__dirname, '../../app/temp');
         let existingTempFiles = new Set();
         let existingTempRootFiles = new Set();
         try {
-          if (existsSync(tempDir)) existingTempFiles = new Set(readdirSync(tempDir));
+          if (existsSync(tempDir)) existingTempFiles = collectAllFiles(tempDir);
         } catch {}
         // 记录 temp 根目录已有文件，用于检测被误放到根目录的文件
         try {
@@ -1129,14 +1129,14 @@ function scanNewFiles(tempDir, existingFiles, conversationId) {
     const entries = readdirSync(dir);
     for (const name of entries) {
       const relName = relPrefix ? `${relPrefix}/${name}` : name;
-      // 顶层文件跳过已有的
-      if (!relPrefix && existingFiles.has(name)) continue;
       try {
         const fullPath = pathResolve(dir, name);
         const stat = statSync(fullPath);
         if (stat.isDirectory()) {
           scanDir(fullPath, relName);
         } else if (stat.isFile()) {
+          // 跳过执行前就已存在的文件
+          if (existingFiles.has(relName)) continue;
           files.push({
             name,
             path: `app/temp/${conversationId}/${relName}`,
@@ -1147,6 +1147,29 @@ function scanNewFiles(tempDir, existingFiles, conversationId) {
       } catch {}
     }
   }
+}
+
+/**
+ * 递归收集目录下所有文件的相对路径
+ */
+function collectAllFiles(baseDir) {
+  const result = new Set();
+  function walk(dir, prefix) {
+    try {
+      const entries = readdirSync(dir);
+      for (const name of entries) {
+        const rel = prefix ? `${prefix}/${name}` : name;
+        const full = pathResolve(dir, name);
+        try {
+          const stat = statSync(full);
+          if (stat.isDirectory()) walk(full, rel);
+          else if (stat.isFile()) result.add(rel);
+        } catch {}
+      }
+    } catch {}
+  }
+  walk(baseDir, '');
+  return result;
 }
 
 /**
