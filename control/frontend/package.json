@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@capacitor/core": "^6.0.0",
+    "marked": "^17.0.3",
     "strip-ansi": "^7.2.0",
     "vue": "^3.4.0",
     "vue-router": "^4.2.5"

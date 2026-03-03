@@ -67,8 +67,7 @@
           </div>
           <div class="flex flex-col min-w-0">
             <span class="text-sm font-serif font-semibold text-ink-900 mb-1">Claude</span>
-            <div v-if="m.content" class="text-ink-800 text-[15px] leading-relaxed whitespace-pre-wrap break-words">
-              {{ m.content }}
+            <div v-if="m.content" class="text-ink-800 text-[15px] leading-relaxed break-words prose-chat" v-html="renderMd(m.content)">
             </div>
             <!-- File attachments -->
             <div v-if="m.attachments && m.attachments.length" class="mt-3 flex flex-col gap-3">
@@ -238,6 +237,14 @@
 
 <script setup>
 import { ref, watch, nextTick, computed } from 'vue'
+import { marked } from 'marked'
+
+marked.setOptions({ breaks: true, gfm: true })
+
+function renderMd(text) {
+  if (!text) return ''
+  return marked.parse(text)
+}
 
 const appUrl = ref(`http://${location.hostname}:5174`)
 fetch('/api/config').then(r => r.json()).then(d => {
@@ -383,3 +390,29 @@ watch(text, () => {
   })
 })
 </script>
+
+<style scoped>
+.prose-chat :deep(p) { margin: 0.4em 0; }
+.prose-chat :deep(p:first-child) { margin-top: 0; }
+.prose-chat :deep(p:last-child) { margin-bottom: 0; }
+.prose-chat :deep(h1),
+.prose-chat :deep(h2),
+.prose-chat :deep(h3),
+.prose-chat :deep(h4) { font-weight: 600; margin: 0.8em 0 0.3em; line-height: 1.3; }
+.prose-chat :deep(h1) { font-size: 1.25em; }
+.prose-chat :deep(h2) { font-size: 1.15em; }
+.prose-chat :deep(h3) { font-size: 1.05em; }
+.prose-chat :deep(ul),
+.prose-chat :deep(ol) { padding-left: 1.4em; margin: 0.4em 0; }
+.prose-chat :deep(li) { margin: 0.15em 0; }
+.prose-chat :deep(code) { font-family: ui-monospace, monospace; font-size: 0.88em; background: var(--color-stone-100, #f5f5f4); padding: 0.15em 0.35em; border-radius: 0.3em; }
+.prose-chat :deep(pre) { background: var(--color-stone-100, #f5f5f4); border-radius: 0.6em; padding: 0.8em 1em; overflow-x: auto; margin: 0.5em 0; }
+.prose-chat :deep(pre code) { background: none; padding: 0; font-size: 0.85em; }
+.prose-chat :deep(blockquote) { border-left: 3px solid var(--color-stone-300, #d6d3d1); padding-left: 0.8em; margin: 0.5em 0; color: var(--color-ink-500, #78716c); }
+.prose-chat :deep(a) { color: var(--color-brand-500, #6366f1); text-decoration: underline; }
+.prose-chat :deep(hr) { border: none; border-top: 1px solid var(--color-stone-200, #e7e5e4); margin: 0.8em 0; }
+.prose-chat :deep(table) { border-collapse: collapse; margin: 0.5em 0; font-size: 0.9em; width: 100%; }
+.prose-chat :deep(th),
+.prose-chat :deep(td) { border: 1px solid var(--color-stone-200, #e7e5e4); padding: 0.35em 0.6em; text-align: left; }
+.prose-chat :deep(th) { background: var(--color-stone-50, #fafaf9); font-weight: 600; }
+</style>
