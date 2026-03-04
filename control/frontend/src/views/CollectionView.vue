@@ -29,8 +29,43 @@
 
     <!-- Page Cards -->
     <div class="max-w-7xl mx-auto px-6">
-      <div v-if="pages.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <PageCard v-for="p in pages" :key="p.id" :page="p" @open="openPage" @delete="deletePage" @preview="previewPage" @feature="toggleFeature" @togglePublic="togglePublic" />
+      <div v-if="pages.length">
+        <!-- View toggle -->
+        <div class="flex items-center justify-end mb-3">
+          <button @click="forceViewMode = forceViewMode === 'compact' ? 'card' : 'compact'"
+            class="w-8 h-8 flex items-center justify-center text-ink-400 hover:text-ink-700 hover:bg-stone-100 rounded-full transition-colors"
+            :title="isCompact ? '切换卡片视图' : '切换紧凑视图'">
+            <i :class="isCompact ? 'ph ph-squares-four' : 'ph ph-list'"></i>
+          </button>
+        </div>
+
+        <!-- Card View -->
+        <div v-if="!isCompact" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <PageCard v-for="p in pages" :key="p.id" :page="p" @open="openPage" @delete="deletePage" @preview="previewPage" @feature="toggleFeature" @togglePublic="togglePublic" />
+        </div>
+
+        <!-- Compact List View -->
+        <div v-else class="bg-paper border border-stone-200 rounded-2xl overflow-hidden divide-y divide-stone-100">
+          <div v-for="p in pages" :key="p.id"
+            @click="previewPage(p)"
+            class="flex items-center gap-3 px-4 py-3 hover:bg-surface/60 transition-colors cursor-pointer group">
+            <div class="w-2 h-2 rounded-full shrink-0" :class="p.status === 'active' ? 'bg-emerald-500' : p.status === 'building' ? 'bg-brand-500 animate-pulse' : 'bg-stone-300'"></div>
+            <span class="font-medium text-sm text-ink-900 truncate flex-1">{{ p.title }}</span>
+            <span class="text-xs font-mono text-ink-400 bg-surface px-2 py-0.5 rounded border border-stone-100 shrink-0 hidden sm:inline">{{ p.route_path }}</span>
+            <span v-if="p.is_public" class="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">公开</span>
+            <div class="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button @click.stop="toggleFeature(p)" class="w-7 h-7 rounded-full flex items-center justify-center transition-colors" :class="p.is_featured ? 'text-amber-500' : 'text-ink-400 hover:text-amber-500'" :title="p.is_featured ? '取消精选' : '设为精选'">
+                <i :class="p.is_featured ? 'ph-fill ph-star' : 'ph ph-star'" class="text-sm"></i>
+              </button>
+              <button @click.stop="openPage(p)" class="w-7 h-7 rounded-full flex items-center justify-center text-ink-400 hover:text-brand-600 transition-colors" title="新窗口打开">
+                <i class="ph ph-arrow-up-right text-sm"></i>
+              </button>
+              <button @click.stop="deletePage(p.id)" class="w-7 h-7 rounded-full flex items-center justify-center text-ink-400 hover:text-red-500 transition-colors" title="删除">
+                <i class="ph ph-trash text-sm"></i>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Empty State -->
@@ -261,7 +296,14 @@ const API = ''
 const pages = ref([])
 const appStatus = ref('stopped')
 const appBaseUrl = ref('')
+const forceViewMode = ref(null) // null = auto, 'card' | 'compact'
 let timer = null
+
+const COMPACT_THRESHOLD = 6
+const isCompact = computed(() => {
+  if (forceViewMode.value) return forceViewMode.value === 'compact'
+  return pages.value.length > COMPACT_THRESHOLD
+})
 
 const statusDotClass = computed(() => {
   if (appStatus.value === 'running') return 'bg-emerald-500'
