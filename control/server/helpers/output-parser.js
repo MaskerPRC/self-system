@@ -106,44 +106,18 @@ export function extractPageInfo(output, requirement) {
     };
   }
 
-  // 仅在输出中包含明确的路由创建证据时才尝试 fallback
-  // 检查是否有 Vue 文件创建的证据
-  const hasVueCreation = output.match(/created|Created|写入|创建.*\.vue/i);
-  const hasRouteAdd = output.match(/routes.*push|routes.*\[|追加.*路由|添加.*路由/i);
-  if (!hasVueCreation && !hasRouteAdd) return null;
+  return null;
+}
 
-  let routePath = null;
-  let title = null;
-
-  // 从路由代码中提取 path
-  const routeMatch = output.match(/path:\s*['"](\/.+?)['"]/g);
-  if (routeMatch) {
-    const last = routeMatch[routeMatch.length - 1];
-    const m = last.match(/path:\s*['"](\/.+?)['"]/);
-    if (m) routePath = m[1];
+/**
+ * 解析路由文件内容，提取所有路由的 path 和 name
+ */
+export function parseRoutePaths(routerContent) {
+  const routes = [];
+  const regex = /\{\s*path:\s*['"](\/.+?)['"]\s*,\s*name:\s*['"](.+?)['"]/g;
+  let match;
+  while ((match = regex.exec(routerContent)) !== null) {
+    routes.push({ path: match[1], name: match[2] });
   }
-
-  // 从路由文件中直接读取最后添加的路由
-  if (!routePath) {
-    try {
-      const routerFile = pathResolve(__dirname, '../../../app/frontend/src/router/index.js');
-      const routerContent = readFileSync(routerFile, 'utf8');
-      const allPaths = [...routerContent.matchAll(/path:\s*['"](\/.+?)['"]/g)].map(m => m[1]);
-      const nonHome = allPaths.filter(p => p !== '/');
-      if (nonHome.length > 0) routePath = nonHome[nonHome.length - 1];
-    } catch {}
-  }
-
-  if (!routePath) return null;
-
-  if (!title) {
-    const nameMatch = output.match(/name:\s*['"](.+?)['"]/);
-    title = nameMatch ? nameMatch[1] : requirement.slice(0, 50);
-  }
-
-  return {
-    title,
-    description: requirement.slice(0, 200),
-    routePath
-  };
+  return routes;
 }

@@ -10,7 +10,7 @@ import { restartAppProject, getAppStatus, getAppLogs } from '../modules/process.
 import { commitChanges } from '../modules/git.js';
 import { broadcast, markProcessing, clearProcessing, markQueued, clearQueued, getProcessingList, getQueuedList } from '../modules/websocket.js';
 import { requestQueue, abortedConversations } from '../modules/queue.js';
-import { extractNaturalText, extractResponse, extractFileInfo, extractAndSaveSkill, extractPageInfo } from '../helpers/output-parser.js';
+import { extractNaturalText, extractResponse, extractFileInfo, extractAndSaveSkill, extractPageInfo, parseRoutePaths } from '../helpers/output-parser.js';
 import { collectAllFiles, scanNewFiles, mergeFileAttachments, rescueMisplacedFiles, verifyAppAfterChange } from '../helpers/file-utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -193,6 +193,15 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
           if (existsSync(tempRootDir)) existingTempRootFiles = new Set(readdirSync(tempRootDir));
         } catch {}
 
+        // 快照当前路由文件，用于后续检测新增路由
+        const routerFilePath = pathResolve(__dirname, '../../../app/frontend/src/router/index.js');
+        let beforeRoutes = [];
+        try {
+          if (existsSync(routerFilePath)) {
+            beforeRoutes = parseRoutePaths(readFileSync(routerFilePath, 'utf8'));
+          }
+        } catch {}
+
         const result = await callClaudeCode(msgContent || '请查看我上传的文件', conversationId, history, attachments);
 
         // 抢救被误放到 app/temp/ 根目录的文件
@@ -234,7 +243,27 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
         }
 
         // 3. 提取页面信息
-        const pageInfo = extractPageInfo(result.stdout, content.trim());
+        let pageInfo = extractPageInfo(result.stdout, content.trim());
+
+        // 如果 Claude 没输出 [PAGE_INFO] 标记，通过路由文件 diff 自动检测新增页面
+        if (!pageInfo) {
+          try {
+            const afterRoutes = parseRoutePaths(readFileSync(routerFilePath, 'utf8'));
+            const beforePaths = new Set(beforeRoutes.map(r => r.path));
+            const newRoutes = afterRoutes.filter(r => !beforePaths.has(r.path));
+            if (newRoutes.length > 0) {
+              const newRoute = newRoutes[0];
+              const title = newRoute.name.replace(/([A-Z])/g, ' $1').trim();
+              pageInfo = {
+                title,
+                description: content.trim().slice(0, 200),
+                routePath: newRoute.path,
+                isPublic: false
+              };
+              console.log(`[PageDetect] 自动检测到新路由: ${newRoute.path} (${title})`);
+            }
+          } catch {}
+        }
 
         if (pageInfo) {
           // 检查该路由是否已有页面记录
