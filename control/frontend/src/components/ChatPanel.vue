@@ -61,20 +61,21 @@
         </div>
 
         <!-- Assistant message -->
-        <div v-else class="flex gap-4 animate-fade-in-up max-w-[90%] sm:max-w-[80%] select-none"
-          @pointerdown="onMsgPointerDown(m.id, $event)"
-          @pointerup="onMsgPointerUp"
-          @pointerleave="onMsgPointerUp"
-          @contextmenu.prevent
-          :class="longPressMsgId === m.id ? 'scale-[0.99] opacity-80 transition-transform' : 'transition-transform'">
+        <div v-else class="group/msg flex gap-4 animate-fade-in-up max-w-[90%] sm:max-w-[80%]">
+          <!-- 收藏按钮：hover 时显示在头像左侧 -->
+          <button @click="emit('toggle-watch-msg', m.id)"
+            class="w-6 h-6 flex items-center justify-center shrink-0 mt-1.5 rounded-full transition-all duration-200"
+            :class="watchMsgIds.includes(m.id)
+              ? 'text-violet-400 opacity-100'
+              : 'text-ink-300 opacity-0 group-hover/msg:opacity-100 hover:text-violet-400'"
+            :title="watchMsgIds.includes(m.id) ? '取消待查看' : '标记待查看'">
+            <i :class="watchMsgIds.includes(m.id) ? 'ph-fill ph-bookmark-simple' : 'ph ph-bookmark-simple'" class="text-sm"></i>
+          </button>
           <div class="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 shrink-0 border border-brand-100 mt-1">
             <i class="ph-fill ph-sparkle"></i>
           </div>
           <div class="flex flex-col min-w-0 relative">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-sm font-serif font-semibold text-ink-900">Claude</span>
-              <i v-if="watchMsgIds.includes(m.id)" class="ph-fill ph-bookmark-simple text-violet-400 text-sm" title="待查看"></i>
-            </div>
+            <span class="text-sm font-serif font-semibold text-ink-900 mb-1">Claude</span>
             <div v-if="m.content" class="text-ink-800 text-[15px] leading-relaxed break-words prose-chat" v-html="renderMd(m.content)">
             </div>
             <!-- File attachments -->
@@ -285,27 +286,6 @@ const isPasteFocused = ref(false)
 const pasteInputRef = ref(null)
 const pasteZoneText = ref('')
 const todoCollapsed = ref(false)
-
-// 消息长按待查看
-const longPressMsgId = ref(null)
-let msgPressTimer = null
-let msgDidLongPress = false
-
-function onMsgPointerDown(msgId, e) {
-  if (e.button && e.button !== 0) return
-  msgDidLongPress = false
-  longPressMsgId.value = msgId
-  msgPressTimer = setTimeout(() => {
-    msgDidLongPress = true
-    longPressMsgId.value = null
-    emit('toggle-watch-msg', msgId)
-  }, 500)
-}
-
-function onMsgPointerUp() {
-  clearTimeout(msgPressTimer)
-  longPressMsgId.value = null
-}
 
 // 解析 TODO.md 内容为任务列表
 const todoItems = computed(() => {

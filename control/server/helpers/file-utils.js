@@ -85,6 +85,8 @@ export function scanNewFiles(tempDir, existingFiles, conversationId) {
         if (stat.isDirectory()) {
           scanDir(fullPath, relName);
         } else if (stat.isFile()) {
+          // 跳过内部文件（如 .history.md、.TODO.md）
+          if (name.startsWith('.')) continue;
           // 跳过执行前就已存在且内容未变的文件
           const oldSig = existingFiles.get(relName);
           if (oldSig !== undefined) {
