@@ -4,8 +4,8 @@ import { isAuthEnabled, validateSession, parseCookie, createSession, destroySess
 const router = express.Router();
 
 router.post('/api/auth/login', (req, res) => {
-  const { password } = req.body;
-  const result = createSession(password);
+  const { username, password } = req.body;
+  const result = createSession(username, password);
   if (!result.success) return res.status(401).json(result);
   res.cookie(COOKIE_NAME, result.token, {
     httpOnly: true,

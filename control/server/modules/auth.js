@@ -9,12 +9,14 @@ export function isAuthEnabled() {
 }
 
 export function createSession(username, password) {
-  if (!isAuthEnabled()) return null;
-  if (username !== process.env.AUTH_USERNAME || password !== process.env.AUTH_PASSWORD) return null;
+  if (!isAuthEnabled()) return { success: false, error: '鉴权未启用' };
+  if (username !== process.env.AUTH_USERNAME || password !== process.env.AUTH_PASSWORD) {
+    return { success: false, error: '用户名或密码错误' };
+  }
 
   const token = crypto.randomBytes(32).toString('hex');
   sessions.set(token, { expiresAt: Date.now() + SESSION_MAX_AGE });
-  return token;
+  return { success: true, token };
 }
 
 export function validateSession(token) {
