@@ -1,5 +1,5 @@
 import { spawn, execSync } from 'child_process';
-import { readFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { resolve as pathResolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { broadcast } from './websocket.js';
@@ -178,14 +178,17 @@ export async function callClaudeCode(requirement, conversationId, history = [], 
     uiStyle = '现代简约风格，使用 Tailwind CSS 4。配色以白色/浅灰为主背景，搭配一个品牌强调色。圆角卡片布局，适当留白，字体清晰易读。响应式设计，移动端友好。';
   }
 
-  // 构建对话历史上下文
+  // 构建对话历史上下文 — 写入文件，避免 prompt 过长
   let historySection = '';
   if (history.length > 0) {
     const historyLines = history.map(m => {
       const role = m.role === 'user' ? '用户' : (m.role === 'assistant' ? '助手' : '系统');
-      return `${role}: ${m.content}`;
+      return `**${role}**: ${m.content}`;
     });
-    historySection = `\n【对话历史】\n${historyLines.join('\n')}\n`;
+    const historyMd = historyLines.join('\n\n---\n\n');
+    const historyPath = pathResolve(tempDir, '.history.md');
+    writeFileSync(historyPath, historyMd, 'utf8');
+    historySection = `\n【对话历史】\n对话历史已保存到文件中，请在需要时使用 Read 工具查看：${historyPath}\n共 ${history.length} 条消息。\n`;
   }
 
   // 构建文件附件上下文

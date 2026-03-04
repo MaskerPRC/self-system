@@ -183,7 +183,7 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
         // 记录 Claude 执行前 temp 目录中已有的文件（递归，用于后续检测新生成的文件）
         const tempDir = pathResolve(__dirname, '../../../app/temp', conversationId);
         const tempRootDir = pathResolve(__dirname, '../../../app/temp');
-        let existingTempFiles = new Set();
+        let existingTempFiles = new Map();
         let existingTempRootFiles = new Set();
         try {
           if (existsSync(tempDir)) existingTempFiles = collectAllFiles(tempDir);

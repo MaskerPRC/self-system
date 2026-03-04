@@ -1,6 +1,7 @@
 import { resolve as pathResolve } from 'path';
-import { existsSync, readdirSync, statSync } from 'fs';
+import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
 import { rename as fsRename, mkdir as fsMkdir } from 'fs/promises';
+import { createHash } from 'crypto';
 
 /**
  * 根据文件扩展名猜测 MIME 类型
@@ -22,10 +23,23 @@ export function guessMimeType(fileName) {
 }
 
 /**
- * 递归收集目录下所有文件的相对路径
+ * 计算文件内容的短签名（md5 前 16 位，足以检测变化）
+ */
+function fileSignature(fullPath) {
+  try {
+    const buf = readFileSync(fullPath);
+    return createHash('md5').update(buf).digest('hex').slice(0, 16);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * 递归收集目录下所有文件的相对路径及其内容签名
+ * 返回 Map<relPath, signature>，用于后续检测新增和被修改的文件
  */
 export function collectAllFiles(baseDir) {
-  const result = new Set();
+  const result = new Map();
   function walk(dir, prefix) {
     try {
       const entries = readdirSync(dir);
@@ -35,7 +49,7 @@ export function collectAllFiles(baseDir) {
         try {
           const stat = statSync(full);
           if (stat.isDirectory()) walk(full, rel);
-          else if (stat.isFile()) result.add(rel);
+          else if (stat.isFile()) result.set(rel, fileSignature(full));
         } catch {}
       }
     } catch {}
@@ -45,8 +59,8 @@ export function collectAllFiles(baseDir) {
 }
 
 /**
- * 扫描 temp 目录中新增的文件（Claude 运行前不存在的文件）
- * 递归扫描子目录，确保嵌套目录中的文件也能被发现
+ * 扫描 temp 目录中新增或被修改的文件
+ * existingFiles 为 Map<relPath, signature>，通过比对签名检测变化
  */
 export function scanNewFiles(tempDir, existingFiles, conversationId) {
   const files = [];
@@ -57,7 +71,7 @@ export function scanNewFiles(tempDir, existingFiles, conversationId) {
     console.warn('[scanNewFiles] 扫描失败:', e.message);
   }
   if (files.length > 0) {
-    console.log(`[scanNewFiles] 发现 ${files.length} 个新文件:`, files.map(f => f.name).join(', '));
+    console.log(`[scanNewFiles] 发现 ${files.length} 个新增/修改文件:`, files.map(f => f.name).join(', '));
   }
   return files;
 
@@ -71,8 +85,12 @@ export function scanNewFiles(tempDir, existingFiles, conversationId) {
         if (stat.isDirectory()) {
           scanDir(fullPath, relName);
         } else if (stat.isFile()) {
-          // 跳过执行前就已存在的文件
-          if (existingFiles.has(relName)) continue;
+          // 跳过执行前就已存在且内容未变的文件
+          const oldSig = existingFiles.get(relName);
+          if (oldSig !== undefined) {
+            const newSig = fileSignature(fullPath);
+            if (oldSig === newSig) continue; // 内容未变，跳过
+          }
           files.push({
             name,
             path: `app/temp/${conversationId}/${relName}`,
