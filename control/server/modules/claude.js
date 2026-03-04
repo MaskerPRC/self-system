@@ -67,7 +67,14 @@ export async function checkClaudeCode() {
  */
 function runClaude(prompt, projectRoot, conversationId) {
   return new Promise((res, reject) => {
-    const model = process.env.CLAUDE_MODEL || 'opus';
+    let model = process.env.CLAUDE_MODEL || 'opus';
+    try {
+      const settingsPath = pathResolve(__dirname, '../settings.json');
+      if (existsSync(settingsPath)) {
+        const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+        if (settings.claudeConfig?.model) model = settings.claudeConfig.model;
+      }
+    } catch {}
     const claudeArgs = ['--model', model, '--dangerously-skip-permissions', '-p', prompt];
     const spawnEnv = { ...process.env };
 

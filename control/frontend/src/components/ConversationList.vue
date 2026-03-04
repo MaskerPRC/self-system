@@ -3,20 +3,38 @@
     :class="open ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'">
     <div class="p-6 pb-2 flex items-center justify-between">
       <h2 class="font-serif font-semibold text-lg text-ink-900">对话</h2>
-      <button @click="$emit('create')" class="w-8 h-8 flex items-center justify-center bg-paper border border-stone-200 text-ink-800 hover:border-brand-500 hover:text-brand-600 rounded-full shadow-subtle transition-all">
-        <i class="ph-bold ph-plus"></i>
-      </button>
+      <div class="flex items-center gap-2">
+        <!-- 待查看过滤开关 -->
+        <button v-if="hasWatchItems" @click="$emit('toggle-watch-filter')"
+          class="h-7 flex items-center gap-1.5 px-2.5 rounded-full text-xs font-medium transition-all duration-200"
+          :class="showWatchOnly
+            ? 'bg-violet-100 text-violet-600 border border-violet-200'
+            : 'bg-stone-100 text-ink-400 border border-stone-200 hover:text-violet-500 hover:border-violet-200'">
+          <i class="ph-fill ph-bookmark-simple text-sm"></i>
+          <span>待查看</span>
+        </button>
+        <button @click="$emit('create')" class="w-8 h-8 flex items-center justify-center bg-paper border border-stone-200 text-ink-800 hover:border-brand-500 hover:text-brand-600 rounded-full shadow-subtle transition-all">
+          <i class="ph-bold ph-plus"></i>
+        </button>
+      </div>
     </div>
 
     <div class="flex-1 overflow-y-auto p-4 pt-2 space-y-1">
       <div v-if="!conversations.length" class="flex flex-col items-center justify-center py-12 text-ink-400">
-        <p class="text-sm">暂无对话</p>
+        <p class="text-sm">{{ showWatchOnly ? '暂无待查看项' : '暂无对话' }}</p>
       </div>
       <div
         v-for="c in conversations" :key="c.id"
-        @click="$emit('select', c.id)"
-        class="group flex items-center justify-between px-4 py-3 rounded-2xl cursor-pointer transition-all duration-200"
-        :class="c.id === activeId ? 'bg-paper shadow-subtle border border-stone-100' : 'hover:bg-stone-100 border border-transparent'"
+        @click="onClick(c.id)"
+        @pointerdown="onPointerDown(c.id, $event)"
+        @pointerup="onPointerUp"
+        @pointerleave="onPointerUp"
+        @contextmenu.prevent
+        class="group flex items-center justify-between px-4 py-3 rounded-2xl cursor-pointer transition-all duration-200 select-none"
+        :class="[
+          c.id === activeId ? 'bg-paper shadow-subtle border border-stone-100' : 'hover:bg-stone-100 border border-transparent',
+          longPressId === c.id ? 'scale-[0.97] opacity-80' : ''
+        ]"
       >
         <div class="overflow-hidden flex-1">
           <div class="flex items-center gap-2">
@@ -24,6 +42,8 @@
             <span v-if="processingIds.includes(c.id)" class="status-dot processing" title="正在回答"></span>
             <span v-else-if="queuedIds.includes(c.id)" class="status-dot queued" title="排队中"></span>
             <span v-else-if="unreadIds.includes(c.id)" class="status-dot unread" title="有新回复"></span>
+            <!-- 待查看标识 -->
+            <i v-if="watchIds.includes(c.id)" class="ph-fill ph-bookmark-simple text-violet-400 text-sm shrink-0" title="待查看"></i>
             <input v-if="editingId === c.id" ref="editInput"
               v-model="editingTitle"
               @keydown.enter="confirmEdit(c.id)"
@@ -58,13 +78,45 @@ defineProps({
   open: Boolean,
   processingIds: { type: Array, default: () => [] },
   queuedIds: { type: Array, default: () => [] },
-  unreadIds: { type: Array, default: () => [] }
+  unreadIds: { type: Array, default: () => [] },
+  watchIds: { type: Array, default: () => [] },
+  hasWatchItems: { type: Boolean, default: false },
+  showWatchOnly: { type: Boolean, default: false }
 })
-const emit = defineEmits(['select', 'create', 'delete', 'rename'])
+const emit = defineEmits(['select', 'create', 'delete', 'rename', 'toggle-watch', 'toggle-watch-filter'])
 
 const editingId = ref(null)
 const editingTitle = ref('')
 const editInput = ref(null)
+
+// 长按逻辑
+const longPressId = ref(null)
+let pressTimer = null
+let didLongPress = false
+
+function onPointerDown(id, e) {
+  if (e.button && e.button !== 0) return // 只响应主键/触摸
+  didLongPress = false
+  longPressId.value = id
+  pressTimer = setTimeout(() => {
+    didLongPress = true
+    longPressId.value = null
+    emit('toggle-watch', id)
+  }, 500)
+}
+
+function onPointerUp() {
+  clearTimeout(pressTimer)
+  longPressId.value = null
+}
+
+function onClick(id) {
+  if (didLongPress) {
+    didLongPress = false
+    return
+  }
+  emit('select', id)
+}
 
 function startEdit(c) {
   editingId.value = c.id

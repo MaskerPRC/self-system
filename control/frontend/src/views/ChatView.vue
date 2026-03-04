@@ -5,16 +5,21 @@
       class="fixed inset-0 bg-ink-900/10 backdrop-blur-[2px] z-40 sm:hidden transition-opacity duration-300"></div>
 
     <ConversationList
-      :conversations="conversations"
+      :conversations="filteredConversations"
       :activeId="activeId"
       :open="showSidebar"
       :processingIds="processingList"
       :queuedIds="queuedList"
       :unreadIds="[...unreadSet]"
+      :watchIds="[...watchSet]"
+      :hasWatchItems="hasWatchItems"
+      :showWatchOnly="showWatchOnly"
       @select="onSelect"
       @create="createConv"
       @delete="deleteConv"
       @rename="renameConv"
+      @toggle-watch="toggleWatchConv"
+      @toggle-watch-filter="showWatchOnly = !showWatchOnly"
     />
     <ChatPanel
       :conversationId="activeId"
@@ -22,9 +27,11 @@
       :isProcessing="isProcessing"
       :chatTitle="currentTitle"
       :todoContent="todoContent"
+      :watchMsgIds="watchMsgIds"
       @send="handleSend"
       @cancel="cancelTask"
       @toggle-sidebar="showSidebar = !showSidebar"
+      @toggle-watch-msg="toggleWatchMsg"
     />
 
     <!-- 并行任务确认弹窗 -->
@@ -73,6 +80,49 @@ const queuedList = ref([])
 const unreadSet = ref(new Set())
 const todoContent = ref(null)
 let todoTimer = null
+
+// 待查看功能
+const watchSet = ref(new Set(JSON.parse(localStorage.getItem('watchConvIds') || '[]')))
+// watchMessageMap: { msgId: convId } — 记录每条待查看消息所属对话
+const watchMessageMap = ref(JSON.parse(localStorage.getItem('watchMsgMap') || '{}'))
+const showWatchOnly = ref(false)
+
+function saveWatch() {
+  localStorage.setItem('watchConvIds', JSON.stringify([...watchSet.value]))
+  localStorage.setItem('watchMsgMap', JSON.stringify(watchMessageMap.value))
+}
+
+function toggleWatchConv(id) {
+  const s = new Set(watchSet.value)
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
+  watchSet.value = s
+  saveWatch()
+}
+
+function toggleWatchMsg(msgId) {
+  const map = { ...watchMessageMap.value }
+  if (map[msgId]) {
+    delete map[msgId]
+  } else {
+    map[msgId] = activeId.value
+  }
+  watchMessageMap.value = map
+  saveWatch()
+}
+
+const watchMsgIds = computed(() => Object.keys(watchMessageMap.value))
+const hasWatchItems = computed(() => watchSet.value.size > 0 || watchMsgIds.value.length > 0)
+
+// 包含待查看消息的对话 ID 集合
+const watchMsgConvIds = computed(() => new Set(Object.values(watchMessageMap.value)))
+
+const filteredConversations = computed(() => {
+  if (!showWatchOnly.value) return conversations.value
+  return conversations.value.filter(c =>
+    watchSet.value.has(c.id) || watchMsgConvIds.value.has(c.id)
+  )
+})
 
 // 并行确认弹窗
 const parallelConfirm = ref(false)

@@ -16,6 +16,101 @@
 
         <!-- Content -->
         <div class="flex-1 overflow-y-auto px-6 py-5">
+          <!-- Claude Code Config Section -->
+          <div>
+            <div class="mb-4">
+              <h3 class="font-medium text-ink-900">Claude Code 配置</h3>
+              <p class="text-xs text-ink-500 mt-0.5">AI 模型提供商设置，保存后立即生效，覆盖环境变量配置</p>
+            </div>
+
+            <div class="space-y-3">
+              <div>
+                <label class="text-xs font-medium text-ink-700 mb-1 block">提供商</label>
+                <select v-model="claudeConfig.provider"
+                  class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors">
+                  <option value="">未配置（使用环境变量）</option>
+                  <option value="qwen">通义千问</option>
+                  <option value="minimax">MiniMax</option>
+                  <option value="zhipu">智谱 GLM</option>
+                  <option value="proxy">代理模式</option>
+                </select>
+              </div>
+
+              <!-- Qwen / MiniMax / Zhipu: API Key -->
+              <div v-if="claudeConfig.provider && claudeConfig.provider !== 'proxy'">
+                <label class="text-xs font-medium text-ink-700 mb-1 block">API Key</label>
+                <div class="relative">
+                  <input
+                    :type="showClaudeKey ? 'text' : 'password'"
+                    v-model="claudeConfig.apiKey"
+                    placeholder="输入 API Key"
+                    class="w-full px-3 py-2 pr-9 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
+                  <button @click="showClaudeKey = !showClaudeKey"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-ink-400 hover:text-ink-700 transition-colors">
+                    <i :class="showClaudeKey ? 'ph ph-eye-slash' : 'ph ph-eye'" class="text-sm"></i>
+                  </button>
+                </div>
+                <p v-if="claudeConfigHasKey && !claudeConfigKeyChanged" class="text-[11px] text-emerald-600 mt-1">
+                  <i class="ph-fill ph-check-circle mr-0.5"></i>已配置（留空保持不变，输入新值可覆盖）
+                </p>
+              </div>
+
+              <!-- Qwen: Model -->
+              <div v-if="claudeConfig.provider === 'qwen'">
+                <label class="text-xs font-medium text-ink-700 mb-1 block">模型名称</label>
+                <input v-model="claudeConfig.model"
+                  placeholder="qwen3.5-plus"
+                  class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
+              </div>
+
+              <!-- Proxy: URL + Key -->
+              <template v-if="claudeConfig.provider === 'proxy'">
+                <div>
+                  <label class="text-xs font-medium text-ink-700 mb-1 block">代理 URL</label>
+                  <input v-model="claudeConfig.proxyUrl"
+                    placeholder="https://example.com"
+                    class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-ink-700 mb-1 block">代理 Key</label>
+                  <div class="relative">
+                    <input
+                      :type="showClaudeKey ? 'text' : 'password'"
+                      v-model="claudeConfig.proxyKey"
+                      placeholder="输入代理 Key"
+                      class="w-full px-3 py-2 pr-9 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
+                    <button @click="showClaudeKey = !showClaudeKey"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-ink-400 hover:text-ink-700 transition-colors">
+                      <i :class="showClaudeKey ? 'ph ph-eye-slash' : 'ph ph-eye'" class="text-sm"></i>
+                    </button>
+                  </div>
+                  <p v-if="claudeConfigHasProxyKey && !claudeConfigProxyKeyChanged" class="text-[11px] text-emerald-600 mt-1">
+                    <i class="ph-fill ph-check-circle mr-0.5"></i>已配置（留空保持不变，输入新值可覆盖）
+                  </p>
+                </div>
+              </template>
+
+              <div class="flex items-center gap-2">
+                <button @click="saveClaudeConfig"
+                  :disabled="claudeConfigSaving || !claudeConfig.provider"
+                  class="text-xs font-medium px-4 py-1.5 bg-brand-500 text-white rounded-full hover:bg-brand-600 disabled:opacity-40 transition-colors">
+                  {{ claudeConfigSaving ? '保存中...' : '保存' }}
+                </button>
+                <button v-if="claudeConfigHasConfig" @click="clearClaudeConfig"
+                  class="text-xs font-medium px-3 py-1.5 rounded-full border border-stone-200 text-ink-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors">
+                  清除配置
+                </button>
+              </div>
+              <div v-if="claudeConfigMessage" class="p-3 rounded-lg text-xs font-medium"
+                :class="claudeConfigError ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'">
+                {{ claudeConfigMessage }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Divider -->
+          <div class="border-t border-stone-200 my-6"></div>
+
           <!-- UI Style Section -->
           <div>
             <div class="mb-4">
@@ -225,7 +320,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 
 const props = defineProps({
   visible: Boolean
@@ -233,6 +328,20 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const API = ''
+
+// Claude Code 配置
+const claudeConfig = ref({ provider: '', apiKey: '', model: '', proxyUrl: '', proxyKey: '' })
+const claudeConfigSaving = ref(false)
+const claudeConfigMessage = ref('')
+const claudeConfigError = ref(false)
+const claudeConfigHasConfig = ref(false)
+const claudeConfigHasKey = ref(false)
+const claudeConfigHasProxyKey = ref(false)
+const showClaudeKey = ref(false)
+const claudeConfigOriginalApiKey = ref('')
+const claudeConfigOriginalProxyKey = ref('')
+const claudeConfigKeyChanged = computed(() => claudeConfig.value.apiKey && claudeConfig.value.apiKey !== claudeConfigOriginalApiKey.value)
+const claudeConfigProxyKeyChanged = computed(() => claudeConfig.value.proxyKey && claudeConfig.value.proxyKey !== claudeConfigOriginalProxyKey.value)
 
 const skills = ref([])
 const showCreateForm = ref(false)
@@ -291,8 +400,81 @@ async function handleDelete(name) {
 }
 
 watch(() => props.visible, (v) => {
-  if (v) { fetchSkills(); fetchCommits(); fetchRemoteConfig(); fetchSettings() }
+  if (v) { fetchClaudeConfig(); fetchSkills(); fetchCommits(); fetchRemoteConfig(); fetchSettings() }
 })
+
+// Claude Code 配置
+async function fetchClaudeConfig() {
+  try {
+    const r = await fetch(`${API}/api/settings/claude-config`)
+    const d = await r.json()
+    if (d.success && d.data) {
+      claudeConfig.value.provider = d.data.provider || ''
+      claudeConfig.value.apiKey = d.data.apiKey || ''
+      claudeConfig.value.model = d.data.model || ''
+      claudeConfig.value.proxyUrl = d.data.proxyUrl || ''
+      claudeConfig.value.proxyKey = d.data.proxyKey || ''
+      claudeConfigHasConfig.value = true
+      claudeConfigHasKey.value = d.data.hasApiKey || false
+      claudeConfigHasProxyKey.value = d.data.hasProxyKey || false
+      claudeConfigOriginalApiKey.value = d.data.apiKey || ''
+      claudeConfigOriginalProxyKey.value = d.data.proxyKey || ''
+    } else {
+      claudeConfig.value = { provider: '', apiKey: '', model: '', proxyUrl: '', proxyKey: '' }
+      claudeConfigHasConfig.value = false
+      claudeConfigHasKey.value = false
+      claudeConfigHasProxyKey.value = false
+    }
+  } catch {}
+}
+
+async function saveClaudeConfig() {
+  claudeConfigSaving.value = true
+  claudeConfigMessage.value = ''
+  claudeConfigError.value = false
+  try {
+    const body = { provider: claudeConfig.value.provider, model: claudeConfig.value.model, proxyUrl: claudeConfig.value.proxyUrl }
+    // 只在用户修改了 key 时才发送
+    if (claudeConfigKeyChanged.value) body.apiKey = claudeConfig.value.apiKey
+    if (claudeConfigProxyKeyChanged.value) body.proxyKey = claudeConfig.value.proxyKey
+    const r = await fetch(`${API}/api/settings/claude-config`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    const d = await r.json()
+    if (d.success) {
+      claudeConfigMessage.value = '配置已保存并生效'
+      claudeConfigHasConfig.value = true
+      fetchClaudeConfig()
+    } else {
+      claudeConfigMessage.value = `保存失败: ${d.error}`
+      claudeConfigError.value = true
+    }
+  } catch (e) {
+    claudeConfigMessage.value = `保存失败: ${e.message}`
+    claudeConfigError.value = true
+  } finally {
+    claudeConfigSaving.value = false
+    setTimeout(() => { claudeConfigMessage.value = '' }, 3000)
+  }
+}
+
+async function clearClaudeConfig() {
+  if (!confirm('确定清除 Claude Code 配置？清除后将恢复使用环境变量设置（需重启容器生效）。')) return
+  try {
+    const r = await fetch(`${API}/api/settings/claude-config`, { method: 'DELETE' })
+    const d = await r.json()
+    if (d.success) {
+      claudeConfig.value = { provider: '', apiKey: '', model: '', proxyUrl: '', proxyKey: '' }
+      claudeConfigHasConfig.value = false
+      claudeConfigHasKey.value = false
+      claudeConfigHasProxyKey.value = false
+      claudeConfigMessage.value = '配置已清除'
+      claudeConfigError.value = false
+      setTimeout(() => { claudeConfigMessage.value = '' }, 2000)
+    }
+  } catch {}
+}
 
 async function fetchSettings() {
   try {
