@@ -150,12 +150,13 @@
         <!-- Input container -->
         <div
           class="flex-1 relative bg-paper rounded-3xl border border-stone-200 shadow-float focus-within:border-stone-300 focus-within:shadow-xl transition-all duration-300 pointer-events-auto"
-          @dragover.prevent="isDragging = true"
-          @dragleave.prevent="isDragging = false"
+          @dragenter.prevent="dragCounter++; isDragging = true"
+          @dragover.prevent
+          @dragleave.prevent="dragCounter--; if (dragCounter <= 0) { dragCounter = 0; isDragging = false }"
           @drop.prevent="onDrop">
 
           <!-- Drag overlay -->
-          <div v-if="isDragging" class="absolute inset-0 rounded-3xl bg-brand-50/80 border-2 border-dashed border-brand-300 z-10 flex items-center justify-center">
+          <div v-if="isDragging" class="absolute inset-0 rounded-3xl bg-brand-50/80 border-2 border-dashed border-brand-300 z-10 flex items-center justify-center pointer-events-none">
             <span class="text-brand-600 text-sm font-medium">释放以添加文件</span>
           </div>
 
@@ -250,10 +251,18 @@
                 <span class="text-sm font-semibold text-ink-800">附件文件</span>
                 <span class="text-xs text-ink-400 bg-stone-100 px-2 py-0.5 rounded-full">{{ drawerFiles.length }}</span>
               </div>
-              <button @click="fileDrawerMsgId = null"
-                class="w-8 h-8 flex items-center justify-center text-ink-400 hover:text-ink-600 hover:bg-stone-100 rounded-full transition-colors">
-                <i class="ph ph-x text-base"></i>
-              </button>
+              <div class="flex items-center gap-1">
+                <button v-if="drawerFiles.length > 1" @click="downloadAllFiles"
+                  class="h-8 flex items-center gap-1.5 px-3 text-xs font-medium text-ink-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
+                  title="下载全部">
+                  <i class="ph ph-download-simple text-sm"></i>
+                  <span>全部下载</span>
+                </button>
+                <button @click="fileDrawerMsgId = null"
+                  class="w-8 h-8 flex items-center justify-center text-ink-400 hover:text-ink-600 hover:bg-stone-100 rounded-full transition-colors">
+                  <i class="ph ph-x text-base"></i>
+                </button>
+              </div>
             </div>
             <!-- Drawer file list -->
             <div class="flex-1 overflow-y-auto py-2">
@@ -312,6 +321,7 @@ const inputRef = ref(null)
 const fileInputRef = ref(null)
 const pendingFiles = ref([])
 const isDragging = ref(false)
+let dragCounter = 0
 const isPasteFocused = ref(false)
 const pasteInputRef = ref(null)
 const pasteZoneText = ref('')
@@ -363,6 +373,7 @@ function onFilesSelected(e) {
 
 function onDrop(e) {
   isDragging.value = false
+  dragCounter = 0
   const files = Array.from(e.dataTransfer?.files || [])
   const remaining = 10 - pendingFiles.value.length
   pendingFiles.value.push(...files.slice(0, remaining))
@@ -432,6 +443,21 @@ function downloadUrl(att) {
     return `/api/conversations/${convId}/files/download?name=${encodeURIComponent(fileName)}`
   }
   return ''
+}
+
+function downloadAllFiles() {
+  const files = drawerFiles.value
+  if (!files.length) return
+  files.forEach((att, i) => {
+    const url = downloadUrl(att)
+    if (!url) return
+    setTimeout(() => {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = att.name
+      a.click()
+    }, i * 200)
+  })
 }
 
 function formatSize(bytes) {
