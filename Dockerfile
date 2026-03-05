@@ -107,6 +107,6 @@ EXPOSE 3000
 
 # 启动脚本
 COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN dos2unix /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
