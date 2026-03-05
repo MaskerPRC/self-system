@@ -1,9 +1,10 @@
 import express from 'express';
 import { resolve as pathResolve, dirname } from 'path';
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync, chownSync } from 'fs';
 import { writeFile as fsWriteFile, mkdir as fsMkdir, rm as fsRm } from 'fs/promises';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 import { getSupabase } from '../modules/supabase.js';
 import { callClaudeCode, verifyAndFixApp, abortClaude } from '../modules/claude.js';
 import { restartAppProject, getAppStatus, getAppLogs } from '../modules/process.js';
@@ -369,13 +370,20 @@ router.post('/api/conversations/:id/upload', (req, res) => {
       const projectRoot = pathResolve(__dirname, '../../..');
       const tempDir = pathResolve(projectRoot, 'app', 'temp', conversationId);
       await fsMkdir(tempDir, { recursive: true });
+      // chown 给 claude 用户，确保 Claude Code 进程可写入
+      try {
+        const uid = parseInt(execSync('id -u claude', { encoding: 'utf-8', shell: '/bin/sh' }).trim());
+        const gid = parseInt(execSync('id -g claude', { encoding: 'utf-8', shell: '/bin/sh' }).trim());
+        chownSync(tempDir, uid, gid);
+      } catch {}
 
       const uploaded = [];
       for (const file of req.files) {
         // multer 使用 latin1 解码 Content-Disposition 中的文件名，需要转回 UTF-8
         const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-        const safeName = originalName.replace(/[/\\:*?"<>|]/g, '_');
-        const finalName = `${Date.now()}-${safeName}`;
+        // 提取扩展名，磁盘文件名使用纯 ASCII 避免中文编码问题
+        const ext = originalName.includes('.') ? '.' + originalName.split('.').pop() : '';
+        const finalName = `${Date.now()}-upload${ext}`;
         await fsWriteFile(pathResolve(tempDir, finalName), file.buffer);
 
         uploaded.push({
