@@ -333,15 +333,15 @@ const drawerFiles = computed(() => {
   return getFileAttachments(msg?.attachments)
 })
 
-// 解析 TODO.md 内容为任务列表
+// 解析 TODO 内容为任务列表，兼容 "- [ ]" 和 "[ ]" 两种格式
 const todoItems = computed(() => {
   if (!props.todoContent) return []
   return props.todoContent.split('\n')
     .map(line => line.trim())
-    .filter(line => line.startsWith('- ['))
+    .filter(line => /^(-\s*)?\[[ xX]\]/.test(line))
     .map(line => ({
-      done: line.startsWith('- [x]') || line.startsWith('- [X]'),
-      text: line.replace(/^- \[[ xX]\]\s*/, '')
+      done: /^(-\s*)?\[[xX]\]/.test(line),
+      text: line.replace(/^(-\s*)?\[[ xX]\]\s*/, '')
     }))
 })
 
