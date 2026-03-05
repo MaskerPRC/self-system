@@ -107,26 +107,14 @@
                   </div>
                 </div>
               </template>
-              <!-- File attachments -->
-              <div class="flex flex-wrap gap-3">
-              <template v-for="(att, i) in m.attachments" :key="'file-' + i">
-                <!-- Skip creation cards -->
-                <template v-if="att.type !== 'page_created' && att.type !== 'skill_created'">
-                <!-- Generic file card for all files -->
-                <div class="flex items-center gap-3 bg-stone-50 rounded-xl px-3 py-2.5 border border-stone-200">
-                  <i :class="attIcon(att)" class="text-xl shrink-0"></i>
-                  <div class="min-w-0">
-                    <div class="text-sm text-ink-800 truncate max-w-[140px]">{{ att.name }}</div>
-                    <div class="text-xs text-ink-400">{{ formatSize(att.size) }}</div>
-                  </div>
-                  <a :href="downloadUrl(att)" :download="att.name"
-                     class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-brand-500 rounded-full hover:bg-stone-100 shrink-0">
-                    <i class="ph ph-download-simple text-sm"></i>
-                  </a>
-                </div>
-              </template>
-              </template>
-              </div>
+              <!-- File attachments trigger -->
+              <button v-if="getFileAttachments(m.attachments).length"
+                @click="openFileDrawer(m.id)"
+                class="flex items-center gap-2 bg-stone-50 hover:bg-stone-100 rounded-xl px-3.5 py-2.5 border border-stone-200 hover:border-stone-300 transition-all duration-200 cursor-pointer group/files">
+                <i class="ph-duotone ph-files text-lg text-ink-400 group-hover/files:text-brand-500 transition-colors"></i>
+                <span class="text-sm text-ink-600 group-hover/files:text-ink-800 transition-colors">{{ getFileAttachments(m.attachments).length }} 个文件</span>
+                <i class="ph ph-caret-up text-xs text-ink-300 group-hover/files:text-ink-500 transition-colors"></i>
+              </button>
             </div>
           </div>
         </div>
@@ -247,6 +235,48 @@
 
       </div>
     </div>
+    <!-- File Drawer Overlay -->
+    <Teleport to="body">
+      <Transition name="drawer-overlay">
+        <div v-if="fileDrawerMsgId" class="fixed inset-0 bg-black/30 z-50" @click="fileDrawerMsgId = null"></div>
+      </Transition>
+      <Transition name="drawer-panel">
+        <div v-if="fileDrawerMsgId" class="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
+          <div class="w-full max-w-lg bg-paper rounded-t-2xl shadow-2xl border border-stone-200 border-b-0 pointer-events-auto max-h-[60vh] flex flex-col">
+            <!-- Drawer header -->
+            <div class="flex items-center justify-between px-5 py-4 border-b border-stone-100 shrink-0">
+              <div class="flex items-center gap-2">
+                <i class="ph-duotone ph-files text-lg text-brand-500"></i>
+                <span class="text-sm font-semibold text-ink-800">附件文件</span>
+                <span class="text-xs text-ink-400 bg-stone-100 px-2 py-0.5 rounded-full">{{ drawerFiles.length }}</span>
+              </div>
+              <button @click="fileDrawerMsgId = null"
+                class="w-8 h-8 flex items-center justify-center text-ink-400 hover:text-ink-600 hover:bg-stone-100 rounded-full transition-colors">
+                <i class="ph ph-x text-base"></i>
+              </button>
+            </div>
+            <!-- Drawer file list -->
+            <div class="flex-1 overflow-y-auto py-2">
+              <div v-for="(att, i) in drawerFiles" :key="i"
+                class="flex items-center gap-3 px-5 py-3 hover:bg-stone-50 transition-colors">
+                <div class="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center shrink-0">
+                  <i :class="attIcon(att)" class="text-xl"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm text-ink-800 truncate">{{ att.name }}</div>
+                  <div class="text-xs text-ink-400 mt-0.5">{{ formatSize(att.size) }}</div>
+                </div>
+                <a :href="downloadUrl(att)" :download="att.name"
+                   class="w-9 h-9 flex items-center justify-center text-ink-400 hover:text-brand-500 hover:bg-brand-50 rounded-xl transition-colors shrink-0"
+                   title="下载">
+                  <i class="ph ph-download-simple text-base"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </section>
 </template>
 
@@ -286,6 +316,22 @@ const isPasteFocused = ref(false)
 const pasteInputRef = ref(null)
 const pasteZoneText = ref('')
 const todoCollapsed = ref(false)
+const fileDrawerMsgId = ref(null)
+
+function getFileAttachments(attachments) {
+  if (!attachments) return []
+  return attachments.filter(a => a.type !== 'page_created' && a.type !== 'skill_created')
+}
+
+function openFileDrawer(msgId) {
+  fileDrawerMsgId.value = msgId
+}
+
+const drawerFiles = computed(() => {
+  if (!fileDrawerMsgId.value) return []
+  const msg = props.messages?.find(m => m.id === fileDrawerMsgId.value)
+  return getFileAttachments(msg?.attachments)
+})
 
 // 解析 TODO.md 内容为任务列表
 const todoItems = computed(() => {
@@ -428,6 +474,12 @@ watch(text, () => {
 .prose-chat :deep(blockquote) { border-left: 3px solid var(--color-stone-300, #d6d3d1); padding-left: 0.8em; margin: 0.5em 0; color: var(--color-ink-500, #78716c); }
 .prose-chat :deep(a) { color: var(--color-brand-500, #6366f1); text-decoration: underline; }
 .prose-chat :deep(hr) { border: none; border-top: 1px solid var(--color-stone-200, #e7e5e4); margin: 0.8em 0; }
+/* Drawer transitions */
+.drawer-overlay-enter-active, .drawer-overlay-leave-active { transition: opacity 0.25s ease; }
+.drawer-overlay-enter-from, .drawer-overlay-leave-to { opacity: 0; }
+.drawer-panel-enter-active { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.drawer-panel-leave-active { transition: transform 0.2s ease-in; }
+.drawer-panel-enter-from, .drawer-panel-leave-to { transform: translateY(100%); }
 .prose-chat :deep(table) { border-collapse: collapse; margin: 0.5em 0; font-size: 0.9em; width: 100%; }
 .prose-chat :deep(th),
 .prose-chat :deep(td) { border: 1px solid var(--color-stone-200, #e7e5e4); padding: 0.35em 0.6em; text-align: left; }
