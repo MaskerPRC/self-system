@@ -63,7 +63,7 @@ elif [ -n "$QWEN_API_KEY" ]; then
     # ===== 通义千问 Qwen 模式 =====
     echo "[配置] 检测到 QWEN_API_KEY，使用通义千问 Coding Plan 模式"
 
-    QWEN_MODEL="${QWEN_MODEL:-qwen3.5-plus}"
+    CLAUDE_MODEL="${CLAUDE_MODEL:-qwen3.5-plus}"
 
     # 配置 ~/.claude.json（跳过 onboarding）
     node --eval '
@@ -83,7 +83,7 @@ elif [ -n "$QWEN_API_KEY" ]; then
         const path = require("path");
         const filePath = path.join(os.homedir(), ".claude", "settings.json");
         const apiKey = "'"$QWEN_API_KEY"'";
-        const model = "'"$QWEN_MODEL"'";
+        const model = "'"$CLAUDE_MODEL"'";
         const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
         fs.writeFileSync(filePath, JSON.stringify({
             ...content,
@@ -95,7 +95,7 @@ elif [ -n "$QWEN_API_KEY" ]; then
         }, null, 2), "utf-8");
     '
 
-    echo "[配置] 通义千问 Coding Plan 配置完成 (模型: ${QWEN_MODEL})"
+    echo "[配置] 通义千问 Coding Plan 配置完成 (模型: ${CLAUDE_MODEL})"
 
 elif [ -n "$CLAUDE_CODE_URL" ] && [ -n "$CLAUDE_CODE_KEY" ]; then
     # ===== 原有代理模式 =====
