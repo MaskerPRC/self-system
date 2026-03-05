@@ -10,7 +10,42 @@ echo "=========================================="
 # ---- 配置 Claude Code ----
 echo "[配置] 正在配置 Claude Code..."
 
-if [ -n "$ZHIPU_API_KEY" ]; then
+if [ -n "$ANTHROPIC_API_KEY" ]; then
+    # ===== Anthropic 官方 API 模式 =====
+    echo "[配置] 检测到 ANTHROPIC_API_KEY，使用 Anthropic 官方 API"
+
+    CLAUDE_MODEL="${CLAUDE_MODEL:-claude-sonnet-4-20250514}"
+
+    # 配置 ~/.claude.json（跳过 onboarding）
+    node --eval '
+        const os = require("os");
+        const fs = require("fs");
+        const path = require("path");
+        const filePath = path.join(os.homedir(), ".claude.json");
+        const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
+        fs.writeFileSync(filePath, JSON.stringify({ ...content, hasCompletedOnboarding: true }, null, 2), "utf-8");
+    '
+
+    # 配置 ~/.claude/settings.json
+    mkdir -p "$HOME/.claude"
+    node --eval '
+        const os = require("os");
+        const fs = require("fs");
+        const path = require("path");
+        const filePath = path.join(os.homedir(), ".claude", "settings.json");
+        const apiKey = "'"$ANTHROPIC_API_KEY"'";
+        const content = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : {};
+        fs.writeFileSync(filePath, JSON.stringify({
+            ...content,
+            env: {
+                ANTHROPIC_API_KEY: apiKey
+            }
+        }, null, 2), "utf-8");
+    '
+
+    echo "[配置] Anthropic 官方 API 配置完成 (模型: ${CLAUDE_MODEL})"
+
+elif [ -n "$ZHIPU_API_KEY" ]; then
     # ===== 智谱 GLM5 模式（官方脚本） =====
     echo "[配置] 检测到 ZHIPU_API_KEY，使用智谱 GLM5 模式"
     curl -sO "https://cdn.bigmodel.cn/install/claude_code_env.sh"
@@ -104,7 +139,7 @@ elif [ -n "$CLAUDE_CODE_URL" ] && [ -n "$CLAUDE_CODE_KEY" ]; then
     echo "[配置] Claude Code 配置完成"
 
 else
-    echo "[警告] 未设置 ZHIPU_API_KEY / MINIMAX_API_KEY / QWEN_API_KEY 或 CLAUDE_CODE_URL/CLAUDE_CODE_KEY"
+    echo "[警告] 未设置 ANTHROPIC_API_KEY / ZHIPU_API_KEY / MINIMAX_API_KEY / QWEN_API_KEY 或 CLAUDE_CODE_URL/CLAUDE_CODE_KEY"
 fi
 
 # 将 Claude 配置复制到非 root 用户（--dangerously-skip-permissions 需要非 root）
