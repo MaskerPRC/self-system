@@ -25,25 +25,25 @@
       </div>
       <div
         v-for="c in conversations" :key="c.id"
-        @click="onClick(c.id)"
-        @pointerdown="onPointerDown(c.id, $event)"
-        @pointerup="onPointerUp"
-        @pointerleave="onPointerUp"
-        @contextmenu.prevent
-        class="group flex items-center justify-between px-4 py-3 rounded-2xl cursor-pointer transition-all duration-200 select-none"
-        :class="[
-          c.id === activeId ? 'bg-paper shadow-subtle border border-stone-100' : 'hover:bg-stone-100 border border-transparent',
-          longPressId === c.id ? 'scale-[0.97] opacity-80' : ''
-        ]"
+        @click="$emit('select', c.id)"
+        class="group flex items-center gap-1 px-2 py-3 rounded-2xl cursor-pointer transition-all duration-200 select-none"
+        :class="c.id === activeId ? 'bg-paper shadow-subtle border border-stone-100' : 'hover:bg-stone-100 border border-transparent'"
       >
+        <!-- 收藏按钮 -->
+        <button @click.stop="$emit('toggle-watch', c.id)"
+          class="w-6 h-6 flex items-center justify-center shrink-0 rounded-full transition-all duration-200"
+          :class="watchIds.includes(c.id)
+            ? 'text-violet-400'
+            : 'text-ink-200 opacity-0 group-hover:opacity-100 hover:text-violet-400'"
+          :title="watchIds.includes(c.id) ? '取消收藏' : '收藏'">
+          <i :class="watchIds.includes(c.id) ? 'ph-fill ph-bookmark-simple' : 'ph ph-bookmark-simple'" class="text-sm"></i>
+        </button>
         <div class="overflow-hidden flex-1">
           <div class="flex items-center gap-2">
             <!-- 状态圆点 -->
             <span v-if="processingIds.includes(c.id)" class="status-dot processing" title="正在回答"></span>
             <span v-else-if="queuedIds.includes(c.id)" class="status-dot queued" title="排队中"></span>
             <span v-else-if="unreadIds.includes(c.id)" class="status-dot unread" title="有新回复"></span>
-            <!-- 待查看标识 -->
-            <i v-if="watchIds.includes(c.id)" class="ph-fill ph-bookmark-simple text-violet-400 text-sm shrink-0" title="待查看"></i>
             <input v-if="editingId === c.id" ref="editInput"
               v-model="editingTitle"
               @keydown.enter="confirmEdit(c.id)"
@@ -88,35 +88,6 @@ const emit = defineEmits(['select', 'create', 'delete', 'rename', 'toggle-watch'
 const editingId = ref(null)
 const editingTitle = ref('')
 const editInput = ref(null)
-
-// 长按逻辑
-const longPressId = ref(null)
-let pressTimer = null
-let didLongPress = false
-
-function onPointerDown(id, e) {
-  if (e.button && e.button !== 0) return // 只响应主键/触摸
-  didLongPress = false
-  longPressId.value = id
-  pressTimer = setTimeout(() => {
-    didLongPress = true
-    longPressId.value = null
-    emit('toggle-watch', id)
-  }, 500)
-}
-
-function onPointerUp() {
-  clearTimeout(pressTimer)
-  longPressId.value = null
-}
-
-function onClick(id) {
-  if (didLongPress) {
-    didLongPress = false
-    return
-  }
-  emit('select', id)
-}
 
 function startEdit(c) {
   editingId.value = c.id
