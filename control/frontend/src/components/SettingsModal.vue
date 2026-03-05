@@ -29,6 +29,7 @@
                 <select v-model="claudeConfig.provider"
                   class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors">
                   <option value="">未配置（使用环境变量）</option>
+                  <option value="anthropic">Anthropic</option>
                   <option value="qwen">通义千问</option>
                   <option value="minimax">MiniMax</option>
                   <option value="zhipu">智谱 GLM</option>
@@ -36,7 +37,7 @@
                 </select>
               </div>
 
-              <!-- Qwen / MiniMax / Zhipu: API Key -->
+              <!-- API Key (anthropic/qwen/minimax/zhipu) -->
               <div v-if="claudeConfig.provider && claudeConfig.provider !== 'proxy'">
                 <label class="text-xs font-medium text-ink-700 mb-1 block">API Key</label>
                 <div class="relative">
@@ -55,11 +56,11 @@
                 </p>
               </div>
 
-              <!-- Model (qwen/zhipu/proxy) -->
-              <div v-if="['qwen', 'zhipu', 'proxy'].includes(claudeConfig.provider)">
+              <!-- Model (anthropic/qwen/zhipu/proxy) -->
+              <div v-if="['anthropic', 'qwen', 'zhipu', 'proxy'].includes(claudeConfig.provider)">
                 <label class="text-xs font-medium text-ink-700 mb-1 block">模型名称</label>
                 <input v-model="claudeConfig.model"
-                  :placeholder="{ qwen: 'qwen3.5-plus', zhipu: 'glm-4-plus', proxy: 'claude-sonnet-4-20250514' }[claudeConfig.provider]"
+                  :placeholder="{ anthropic: 'claude-sonnet-4-20250514', qwen: 'qwen3.5-plus', zhipu: 'glm-4-plus', proxy: 'claude-sonnet-4-20250514' }[claudeConfig.provider]"
                   class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
               </div>
 

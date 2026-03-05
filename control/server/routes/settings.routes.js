@@ -56,6 +56,10 @@ router.post('/api/settings', async (req, res) => {
 
 // 提供商对应的 Claude CLI env 配置
 const PROVIDER_ENV_MAP = {
+  anthropic: (config) => ({
+    ANTHROPIC_API_KEY: config.apiKey,
+    ANTHROPIC_MODEL: config.model || 'claude-sonnet-4-20250514'
+  }),
   qwen: (config) => ({
     ANTHROPIC_AUTH_TOKEN: config.apiKey,
     ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',

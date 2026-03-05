@@ -19,7 +19,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - NODE_ENV=production
-      # Claude Code 配置（优先级：ZHIPU > MINIMAX > QWEN > 代理）
+      # Claude Code 配置（优先级：ANTHROPIC > ZHIPU > MINIMAX > QWEN > 代理）
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ZHIPU_API_KEY=${ZHIPU_API_KEY}
       - MINIMAX_API_KEY=${MINIMAX_API_KEY}
       - QWEN_API_KEY=${QWEN_API_KEY}

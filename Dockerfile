@@ -53,6 +53,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Claude Code 配置（通过 docker-compose 覆盖，优先级从高到低）
+# 模式零：Anthropic 官方 API
+ENV ANTHROPIC_API_KEY=
 # 模式一：智谱 GLM5
 ENV ZHIPU_API_KEY=
 # 模式二：MiniMax
