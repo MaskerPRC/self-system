@@ -56,6 +56,14 @@
                 </p>
               </div>
 
+              <!-- Base URL (anthropic only) -->
+              <div v-if="claudeConfig.provider === 'anthropic'">
+                <label class="text-xs font-medium text-ink-700 mb-1 block">Base URL <span class="text-ink-400 font-normal">（可选）</span></label>
+                <input v-model="claudeConfig.baseUrl"
+                  placeholder="https://api.anthropic.com"
+                  class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
+              </div>
+
               <!-- Model (anthropic/qwen/zhipu/proxy) -->
               <div v-if="['anthropic', 'qwen', 'zhipu', 'proxy'].includes(claudeConfig.provider)">
                 <label class="text-xs font-medium text-ink-700 mb-1 block">模型名称</label>
@@ -354,7 +362,7 @@ const emit = defineEmits(['close'])
 const API = ''
 
 // Claude Code 配置
-const claudeConfig = ref({ provider: '', apiKey: '', model: '', proxyUrl: '', proxyKey: '' })
+const claudeConfig = ref({ provider: '', apiKey: '', model: '', baseUrl: '', proxyUrl: '', proxyKey: '' })
 const claudeConfigSaving = ref(false)
 const claudeConfigMessage = ref('')
 const claudeConfigError = ref(false)
@@ -441,6 +449,7 @@ async function fetchClaudeConfig() {
       claudeConfig.value.provider = d.data.provider || ''
       claudeConfig.value.apiKey = d.data.apiKey || ''
       claudeConfig.value.model = d.data.model || ''
+      claudeConfig.value.baseUrl = d.data.baseUrl || ''
       claudeConfig.value.proxyUrl = d.data.proxyUrl || ''
       claudeConfig.value.proxyKey = d.data.proxyKey || ''
       claudeConfigHasConfig.value = true
@@ -449,7 +458,7 @@ async function fetchClaudeConfig() {
       claudeConfigOriginalApiKey.value = d.data.apiKey || ''
       claudeConfigOriginalProxyKey.value = d.data.proxyKey || ''
     } else {
-      claudeConfig.value = { provider: '', apiKey: '', model: '', proxyUrl: '', proxyKey: '' }
+      claudeConfig.value = { provider: '', apiKey: '', model: '', baseUrl: '', proxyUrl: '', proxyKey: '' }
       claudeConfigHasConfig.value = false
       claudeConfigHasKey.value = false
       claudeConfigHasProxyKey.value = false
@@ -462,7 +471,7 @@ async function saveClaudeConfig() {
   claudeConfigMessage.value = ''
   claudeConfigError.value = false
   try {
-    const body = { provider: claudeConfig.value.provider, model: claudeConfig.value.model, proxyUrl: claudeConfig.value.proxyUrl }
+    const body = { provider: claudeConfig.value.provider, model: claudeConfig.value.model, baseUrl: claudeConfig.value.baseUrl, proxyUrl: claudeConfig.value.proxyUrl }
     // 只在用户修改了 key 时才发送
     if (claudeConfigKeyChanged.value) body.apiKey = claudeConfig.value.apiKey
     if (claudeConfigProxyKeyChanged.value) body.proxyKey = claudeConfig.value.proxyKey
@@ -494,7 +503,7 @@ async function clearClaudeConfig() {
     const r = await fetch(`${API}/api/settings/claude-config`, { method: 'DELETE' })
     const d = await r.json()
     if (d.success) {
-      claudeConfig.value = { provider: '', apiKey: '', model: '', proxyUrl: '', proxyKey: '' }
+      claudeConfig.value = { provider: '', apiKey: '', model: '', baseUrl: '', proxyUrl: '', proxyKey: '' }
       claudeConfigHasConfig.value = false
       claudeConfigHasKey.value = false
       claudeConfigHasProxyKey.value = false

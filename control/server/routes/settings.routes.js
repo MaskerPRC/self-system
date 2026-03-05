@@ -56,10 +56,14 @@ router.post('/api/settings', async (req, res) => {
 
 // 提供商对应的 Claude CLI env 配置
 const PROVIDER_ENV_MAP = {
-  anthropic: (config) => ({
-    ANTHROPIC_API_KEY: config.apiKey,
-    ANTHROPIC_MODEL: config.model || 'claude-sonnet-4-20250514'
-  }),
+  anthropic: (config) => {
+    const env = {
+      ANTHROPIC_API_KEY: config.apiKey,
+      ANTHROPIC_MODEL: config.model || 'claude-sonnet-4-20250514'
+    };
+    if (config.baseUrl) env.ANTHROPIC_BASE_URL = config.baseUrl;
+    return env;
+  },
   qwen: (config) => ({
     ANTHROPIC_AUTH_TOKEN: config.apiKey,
     ANTHROPIC_BASE_URL: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
@@ -163,6 +167,7 @@ router.get('/api/settings/claude-config', (req, res) => {
       apiKey: maskKey(config.apiKey),
       hasApiKey: !!config.apiKey,
       model: config.model || '',
+      baseUrl: config.baseUrl || '',
       proxyUrl: config.proxyUrl || '',
       proxyKey: maskKey(config.proxyKey),
       hasProxyKey: !!config.proxyKey
@@ -172,7 +177,7 @@ router.get('/api/settings/claude-config', (req, res) => {
 
 router.post('/api/settings/claude-config', async (req, res) => {
   try {
-    const { provider, apiKey, model, proxyUrl, proxyKey } = req.body;
+    const { provider, apiKey, model, baseUrl, proxyUrl, proxyKey } = req.body;
     if (!provider) return res.status(400).json({ success: false, error: '请选择提供商' });
 
     // 合并：如果前端没发送 key（mask 值），保留原有 key
@@ -182,6 +187,7 @@ router.post('/api/settings/claude-config', async (req, res) => {
       provider,
       apiKey: (apiKey && !apiKey.startsWith('****')) ? apiKey : oldConfig.apiKey || '',
       model: model || '',
+      baseUrl: baseUrl || '',
       proxyUrl: proxyUrl || '',
       proxyKey: (proxyKey && !proxyKey.startsWith('****')) ? proxyKey : oldConfig.proxyKey || ''
     };
