@@ -13,6 +13,8 @@ services:
       - app-data:/app/app
       # Claude 配置持久化（Skills 等）
       - claude-data:/app/.claude
+      # SQLite 数据持久化（对话、消息、页面等）
+      - control-data:/app/data
       # Docker socket 挂载（用于管理应用容器）
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -72,6 +74,8 @@ volumes:
   app-data:
     driver: local
   claude-data:
+    driver: local
+  control-data:
     driver: local
 
 networks:
