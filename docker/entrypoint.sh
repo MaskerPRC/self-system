@@ -3,6 +3,10 @@
 # CI 模式：避免 pnpm 交互式提示
 export CI=true
 
+# UTF-8 locale（解决 CJK 文件名编码问题）
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+
 echo "=========================================="
 echo "  Digital Avatar - 控制容器"
 echo "=========================================="

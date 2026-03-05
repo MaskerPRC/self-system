@@ -1,28 +1,56 @@
 # syntax=docker/dockerfile:1
-FROM node:20-alpine
+FROM ubuntu:24.04
 
-# 安装必要工具（包含 docker-cli 用于管理应用容器）
-RUN apk add --no-cache \
+# 避免 apt 交互提示
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 安装 Node.js 20 和必要工具
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends \
+    nodejs \
     git \
     bash \
-    curl \
     openssh-client \
     python3 \
     make \
     g++ \
-    dos2unix \
     jq \
     iproute2 \
     lsof \
-    github-cli \
-    docker-cli
+    unzip \
+    p7zip-full \
+    locales \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 Docker CLI
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list && \
+    apt-get update && apt-get install -y --no-install-recommends docker-ce-cli && \
+    rm -rf /var/lib/apt/lists/*
+
+# 安装 GitHub CLI
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list && \
+    apt-get update && apt-get install -y --no-install-recommends gh && \
+    rm -rf /var/lib/apt/lists/*
+
+# UTF-8 locale 支持（含中文）
+RUN sed -i 's/# en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && \
+    sed -i 's/# zh_CN.UTF-8/zh_CN.UTF-8/' /etc/locale.gen && \
+    locale-gen
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
 # 安装 pnpm、serve（静态文件服务）、Claude Code CLI
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g pnpm serve @anthropic-ai/claude-code
 
 # 创建非 root 用户（--dangerously-skip-permissions 不允许 root）
-RUN adduser -D -h /home/claude claude
+RUN useradd -m -d /home/claude -s /bin/bash claude
 
 # CI 模式避免 pnpm 交互提示
 ENV CI=true
