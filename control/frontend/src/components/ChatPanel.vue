@@ -241,8 +241,8 @@
         <div v-if="fileDrawerMsgId" class="fixed inset-0 bg-black/30 z-50" @click="fileDrawerMsgId = null"></div>
       </Transition>
       <Transition name="drawer-panel">
-        <div v-if="fileDrawerMsgId" class="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
-          <div class="w-full max-w-lg bg-paper rounded-t-2xl shadow-2xl border border-stone-200 border-b-0 pointer-events-auto max-h-[60vh] flex flex-col">
+        <div v-if="fileDrawerMsgId" class="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
+          <div class="w-full bg-paper rounded-t-2xl shadow-2xl border border-stone-200 border-b-0 pointer-events-auto max-h-[60vh] flex flex-col">
             <!-- Drawer header -->
             <div class="flex items-center justify-between px-5 py-4 border-b border-stone-100 shrink-0">
               <div class="flex items-center gap-2">
