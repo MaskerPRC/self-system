@@ -62,8 +62,7 @@ COPY control/server/package.json /app/control/server/package.json
 COPY control/frontend/package.json /app/control/frontend/package.json
 
 # ---- 安装控制项目依赖 ----
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
-    cd /app/control/server && pnpm install && \
+RUN cd /app/control/server && pnpm install && \
     cd /app/control/frontend && pnpm install
 
 # ---- 复制控制项目源码 ----
