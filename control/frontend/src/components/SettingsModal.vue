@@ -55,11 +55,11 @@
                 </p>
               </div>
 
-              <!-- Qwen: Model -->
-              <div v-if="claudeConfig.provider === 'qwen'">
+              <!-- Model (qwen/zhipu/proxy) -->
+              <div v-if="['qwen', 'zhipu', 'proxy'].includes(claudeConfig.provider)">
                 <label class="text-xs font-medium text-ink-700 mb-1 block">模型名称</label>
                 <input v-model="claudeConfig.model"
-                  placeholder="qwen3.5-plus"
+                  :placeholder="{ qwen: 'qwen3.5-plus', zhipu: 'glm-4-plus', proxy: 'claude-sonnet-4-20250514' }[claudeConfig.provider]"
                   class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
               </div>
 
