@@ -188,7 +188,9 @@ export async function callClaudeCode(requirement, conversationId, history = [], 
     const historyMd = historyLines.join('\n\n---\n\n');
     const historyPath = pathResolve(tempDir, '.history.md');
     writeFileSync(historyPath, historyMd, 'utf8');
-    historySection = `\n【对话历史】\n对话历史已保存到文件中，请在需要时使用 Read 工具查看：${historyPath}\n共 ${history.length} 条消息。\n`;
+    const totalChars = historyMd.length;
+    const tailChars = Math.min(3000, totalChars);
+    historySection = `\n【对话历史】\n对话历史已保存到文件：${historyPath}\n共 ${history.length} 条消息，${totalChars} 字。\n\n⚠️ 上下文阅读规则（必须遵守）：\n1. **最近内容（最后 ${tailChars} 字）必须读取**：使用 Bash 工具执行 \`tail -c ${tailChars} "${historyPath}"\` 获取最新对话上下文\n2. **更早的历史按需查阅**：如果当前问题可能涉及更早的讨论，使用 Grep 工具在历史文件中搜索相关关键词，或使用 Read 工具查看完整历史\n3. **不可跳过第 1 步**，最近的对话上下文对理解当前问题至关重要\n`;
   }
 
   // 构建文件附件上下文

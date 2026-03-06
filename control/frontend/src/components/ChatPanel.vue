@@ -62,17 +62,19 @@
 
         <!-- Assistant message -->
         <div v-else class="group/msg flex gap-4 animate-fade-in-up max-w-[90%] sm:max-w-[80%]">
-          <!-- 收藏按钮：hover 时显示在头像左侧 -->
-          <button @click="emit('toggle-watch-msg', m.id)"
-            class="w-6 h-6 flex items-center justify-center shrink-0 mt-1.5 rounded-full transition-all duration-200"
-            :class="watchMsgIds.includes(m.id)
-              ? 'text-violet-400 opacity-100'
-              : 'text-ink-300 opacity-0 group-hover/msg:opacity-100 hover:text-violet-400'"
-            :title="watchMsgIds.includes(m.id) ? '取消待查看' : '标记待查看'">
-            <i :class="watchMsgIds.includes(m.id) ? 'ph-fill ph-bookmark-simple' : 'ph ph-bookmark-simple'" class="text-sm"></i>
-          </button>
-          <div class="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 shrink-0 border border-brand-100 mt-1">
-            <i class="ph-fill ph-sparkle"></i>
+          <div class="relative shrink-0 mt-1">
+            <div class="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 border border-brand-100">
+              <i class="ph-fill ph-sparkle"></i>
+            </div>
+            <!-- 收藏按钮：hover 时显示在头像右上角 -->
+            <button @click="emit('toggle-watch-msg', m.id)"
+              class="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center rounded-full transition-all duration-200 bg-white shadow-sm"
+              :class="watchMsgIds.includes(m.id)
+                ? 'text-violet-400 opacity-100'
+                : 'text-ink-300 opacity-0 group-hover/msg:opacity-100 hover:text-violet-400'"
+              :title="watchMsgIds.includes(m.id) ? '取消待查看' : '标记待查看'">
+              <i :class="watchMsgIds.includes(m.id) ? 'ph-fill ph-bookmark-simple' : 'ph ph-bookmark-simple'" class="text-xs"></i>
+            </button>
           </div>
           <div class="flex flex-col min-w-0 relative">
             <span class="text-sm font-serif font-semibold text-ink-900 mb-1">Claude</span>
