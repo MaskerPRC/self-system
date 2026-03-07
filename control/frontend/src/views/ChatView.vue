@@ -28,6 +28,7 @@
       :chatTitle="currentTitle"
       :todoContent="todoContent"
       :watchMsgIds="watchMsgIds"
+      :pages="pages"
       @send="handleSend"
       @cancel="cancelTask"
       @toggle-sidebar="showSidebar = !showSidebar"
@@ -80,6 +81,17 @@ const queuedList = ref([])
 const unreadSet = ref(new Set())
 const todoContent = ref(null)
 let todoTimer = null
+
+// App pages 列表（用于 @mention）
+const pages = ref([])
+
+async function fetchPages() {
+  try {
+    const r = await fetch(`${API}/api/pages`)
+    const d = await r.json()
+    if (d.success) pages.value = d.data || []
+  } catch {}
+}
 
 // 待查看功能
 const watchSet = ref(new Set(JSON.parse(localStorage.getItem('watchConvIds') || '[]')))
@@ -206,7 +218,7 @@ async function renameConv(id, title) {
 }
 
 async function sendMessage(payload) {
-  const { content, files } = payload
+  const { content, files, targetApps } = payload
   if (!activeId.value) return
   if (!content?.trim() && (!files || !files.length)) return
 
@@ -240,7 +252,8 @@ async function sendMessage(payload) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       content: content?.trim() || '',
-      attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined
+      attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+      targetApps: targetApps || undefined
     })
   })
 }
@@ -400,6 +413,7 @@ watch(isProcessing, (val) => {
 })
 onMounted(() => {
   fetchConvs()
+  fetchPages()
   connectWs()
   window.addEventListener('switch-conversation', onSwitchConversation)
 })

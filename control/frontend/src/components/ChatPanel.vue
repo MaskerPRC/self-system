@@ -162,6 +162,18 @@
             <span class="text-brand-600 text-sm font-medium">释放以添加文件</span>
           </div>
 
+          <!-- Selected apps tags -->
+          <div v-if="selectedApps.length" class="flex flex-wrap gap-1.5 px-5 pt-3 pb-1">
+            <span v-for="app in selectedApps" :key="app.id"
+              class="inline-flex items-center gap-1 bg-brand-50 text-brand-600 rounded-full px-2.5 py-1 text-xs font-medium border border-brand-100">
+              <i class="ph ph-browser text-xs"></i>
+              {{ app.title }}
+              <button @click="removeApp(app.id)" class="text-brand-400 hover:text-red-500 transition-colors ml-0.5">
+                <i class="ph ph-x text-[10px]"></i>
+              </button>
+            </span>
+          </div>
+
           <!-- Pending files preview -->
           <div v-if="pendingFiles.length" class="flex flex-wrap gap-2 px-5 pt-3 pb-1">
             <div v-for="(f, i) in pendingFiles" :key="i"
@@ -181,14 +193,31 @@
           <textarea
             ref="inputRef"
             v-model="text"
-            @keydown.enter.exact.prevent="send"
+            @keydown.enter.exact.prevent="showMention && filteredApps.length ? selectApp(filteredApps[mentionIndex]) : send()"
+            @keydown="onMentionKeydown"
+            @input="onInput"
             @paste="onPaste"
             @focus="onMainInputFocus"
             :disabled="isProcessing"
             rows="1"
             class="w-full bg-transparent border-0 outline-none resize-none py-4 pl-14 pr-14 text-ink-900 placeholder-ink-400 max-h-[160px] disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
-            placeholder="输入需求..."
+            placeholder="输入需求... 输入 @ 选择目标应用"
           ></textarea>
+
+          <!-- @mention dropdown -->
+          <div v-if="showMention && filteredApps.length"
+            class="absolute left-4 right-4 bottom-full mb-2 bg-paper border border-stone-200 rounded-2xl shadow-xl overflow-hidden z-20 max-h-[240px] overflow-y-auto">
+            <div v-for="(app, i) in filteredApps" :key="app.id"
+              @mousedown.prevent="selectApp(app)"
+              class="flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors"
+              :class="i === mentionIndex ? 'bg-brand-50 text-brand-700' : 'hover:bg-stone-50 text-ink-700'">
+              <i class="ph ph-browser text-base" :class="i === mentionIndex ? 'text-brand-500' : 'text-ink-400'"></i>
+              <div class="min-w-0 flex-1">
+                <div class="text-sm font-medium truncate">{{ app.title }}</div>
+                <div class="text-xs text-ink-400 truncate">{{ app.route_path }}</div>
+              </div>
+            </div>
+          </div>
 
           <!-- Attach button -->
           <button @click="fileInputRef?.click()" :disabled="isProcessing"
@@ -313,7 +342,8 @@ const props = defineProps({
   isProcessing: Boolean,
   chatTitle: { type: String, default: '选择一个对话' },
   todoContent: { type: String, default: null },
-  watchMsgIds: { type: Array, default: () => [] }
+  watchMsgIds: { type: Array, default: () => [] },
+  pages: { type: Array, default: () => [] }
 })
 const emit = defineEmits(['send', 'toggle-sidebar', 'cancel', 'toggle-watch-msg'])
 
@@ -329,6 +359,24 @@ const pasteInputRef = ref(null)
 const pasteZoneText = ref('')
 const todoCollapsed = ref(false)
 const fileDrawerMsgId = ref(null)
+
+// @mention 功能
+const selectedApps = ref([])
+const showMention = ref(false)
+const mentionQuery = ref('')
+const mentionIndex = ref(0)
+const mentionStartPos = ref(-1)
+
+const filteredApps = computed(() => {
+  const q = mentionQuery.value.toLowerCase()
+  const selectedIds = new Set(selectedApps.value.map(a => a.id))
+  const available = props.pages.filter(p => !selectedIds.has(p.id))
+  if (!q) return available
+  return available.filter(p =>
+    (p.title || '').toLowerCase().includes(q) ||
+    (p.route_path || '').toLowerCase().includes(q)
+  )
+})
 
 function getFileAttachments(attachments) {
   if (!attachments) return []
@@ -360,10 +408,69 @@ const todoItems = computed(() => {
 function send() {
   if (props.isProcessing) return
   if (!text.value.trim() && !pendingFiles.value.length) return
-  emit('send', { content: text.value, files: [...pendingFiles.value] })
+  emit('send', {
+    content: text.value,
+    files: [...pendingFiles.value],
+    targetApps: selectedApps.value.length > 0 ? selectedApps.value.map(a => ({ id: a.id, title: a.title, route_path: a.route_path })) : undefined
+  })
   text.value = ''
   pendingFiles.value = []
+  selectedApps.value = []
+  showMention.value = false
   if (inputRef.value) inputRef.value.style.height = 'auto'
+}
+
+function onInput(e) {
+  const val = text.value
+  const pos = inputRef.value?.selectionStart || 0
+  // 检测 @ 触发
+  const before = val.slice(0, pos)
+  const atMatch = before.match(/@([^\s@]*)$/)
+  if (atMatch) {
+    mentionStartPos.value = before.lastIndexOf('@')
+    mentionQuery.value = atMatch[1]
+    showMention.value = true
+    mentionIndex.value = 0
+  } else {
+    showMention.value = false
+  }
+}
+
+function selectApp(app) {
+  selectedApps.value = [...selectedApps.value, app]
+  // 移除输入框中的 @xxx 文本
+  const pos = mentionStartPos.value
+  if (pos >= 0) {
+    const before = text.value.slice(0, pos)
+    const after = text.value.slice(inputRef.value?.selectionStart || text.value.length)
+    text.value = before + after
+  }
+  showMention.value = false
+  mentionQuery.value = ''
+  nextTick(() => inputRef.value?.focus())
+}
+
+function removeApp(appId) {
+  selectedApps.value = selectedApps.value.filter(a => a.id !== appId)
+}
+
+function onMentionKeydown(e) {
+  if (!showMention.value || !filteredApps.value.length) return
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    mentionIndex.value = (mentionIndex.value + 1) % filteredApps.value.length
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    mentionIndex.value = (mentionIndex.value - 1 + filteredApps.value.length) % filteredApps.value.length
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    if (showMention.value && filteredApps.value.length) {
+      e.preventDefault()
+      e.stopPropagation()
+      selectApp(filteredApps.value[mentionIndex.value])
+    }
+  } else if (e.key === 'Escape') {
+    showMention.value = false
+  }
 }
 
 function onFilesSelected(e) {

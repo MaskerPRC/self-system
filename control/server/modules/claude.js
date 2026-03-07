@@ -145,7 +145,7 @@ function runClaude(prompt, projectRoot, conversationId) {
 /**
  * 调用 Claude Code 处理用户需求
  */
-export async function callClaudeCode(requirement, conversationId, history = [], attachments = []) {
+export async function callClaudeCode(requirement, conversationId, history = [], attachments = [], targetApps = []) {
   const isInstalled = await checkClaudeCode();
   if (!isInstalled) throw new Error('Claude Code CLI 未安装或不可用');
 
@@ -203,6 +203,22 @@ ${fileList}
 `;
   }
 
+  // 构建目标应用范围限制
+  let targetAppsSection = '';
+  if (targetApps && targetApps.length > 0) {
+    const appList = targetApps.map(a => `- "${a.title}" (路由: ${a.route_path})`).join('\n');
+    targetAppsSection = `\n【⚠️ 操作范围限制】
+用户指定了本次操作的目标应用，你必须严格遵守以下限制：
+${appList}
+
+规则：
+1. 只能修改上述指定应用的相关文件（对应的 .vue 页面文件、路由文件、后端路由文件等）
+2. 严禁修改、删除或影响任何其他应用/页面的代码和路由
+3. 如果需要修改共享文件（如 app/server/index.js、app/frontend/src/router/index.js），只允许修改与上述指定应用相关的部分
+4. 如果用户的需求与指定应用无关，请在 [RESPONSE] 中提示用户
+`;
+  }
+
   const prompt = `你是一个"数字渐进式分身"平台的 AI 助手。根据用户需求，你需要判断该如何处理。
 
 【项目结构说明】
@@ -210,7 +226,7 @@ ${fileList}
 - app/frontend/ : Vue 3 前端应用（端口 5174），承载多个交互页面
 - app/server/   : Node.js + Express 后端（端口 3001），为交互页面提供 API
 - .claude/skills/ : Skills 目录，存放已安装的技能配置
-${skillsSection}${historySection}${attachmentsSection}
+${skillsSection}${historySection}${attachmentsSection}${targetAppsSection}
 【当前用户消息】
 ${requirement}
 
