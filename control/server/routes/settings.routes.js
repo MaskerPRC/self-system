@@ -5,6 +5,8 @@ import { writeFile as fsWriteFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { homedir } from 'os';
+import { supabase } from '../modules/supabase.js';
+import { sqliteDb } from '../modules/sqlite.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const router = express.Router();
@@ -23,29 +25,82 @@ router.get('/api/config', (req, res) => {
   });
 });
 
-// ==================== 设置 API ====================
+// ==================== 设置 API（DB 持久化） ====================
 
-const settingsPath = pathResolve(__dirname, '..', 'settings.json');
 const DEFAULT_SETTINGS = {
   uiStyle: '现代简约风格，使用 Tailwind CSS 4。配色以白色/浅灰为主背景，搭配一个品牌强调色。圆角卡片布局，适当留白，字体清晰易读。响应式设计，移动端友好。'
 };
 
-function readSettings() {
+// 从旧 settings.json 迁移数据到 DB（仅执行一次）
+const settingsJsonPath = pathResolve(__dirname, '..', 'settings.json');
+
+async function migrateFromJsonIfNeeded() {
   try {
-    if (existsSync(settingsPath)) return JSON.parse(readFileSync(settingsPath, 'utf8'));
-  } catch {}
-  return { ...DEFAULT_SETTINGS };
+    if (!existsSync(settingsJsonPath)) return;
+    const fileData = JSON.parse(readFileSync(settingsJsonPath, 'utf8'));
+    // 检查 DB 中是否已有数据
+    const existing = await readSettings();
+    const hasDbData = Object.keys(existing).some(k => k !== 'uiStyle' || existing[k] !== DEFAULT_SETTINGS.uiStyle);
+    if (hasDbData) return; // DB 已有自定义数据，不覆盖
+
+    for (const [key, value] of Object.entries(fileData)) {
+      await writeSetting(key, typeof value === 'string' ? value : JSON.stringify(value));
+    }
+    console.log('[Settings] 已从 settings.json 迁移到数据库');
+  } catch (e) {
+    console.error('[Settings] 迁移失败:', e.message);
+  }
 }
 
-router.get('/api/settings', (req, res) => {
-  res.json({ success: true, data: readSettings() });
+async function readSettings() {
+  const result = { ...DEFAULT_SETTINGS };
+  try {
+    if (supabase) {
+      const { data } = await supabase.from('settings').select('key, value');
+      if (data) data.forEach(row => {
+        try { result[row.key] = JSON.parse(row.value); } catch { result[row.key] = row.value; }
+      });
+    } else {
+      const rows = sqliteDb.prepare('SELECT key, value FROM settings').all();
+      rows.forEach(row => {
+        try { result[row.key] = JSON.parse(row.value); } catch { result[row.key] = row.value; }
+      });
+    }
+  } catch (e) {
+    console.error('[Settings] 读取失败:', e.message);
+  }
+  return result;
+}
+
+async function writeSetting(key, value) {
+  const strValue = typeof value === 'string' ? value : JSON.stringify(value);
+  // 始终写入 SQLite（作为本地缓存，供同步读取使用）
+  sqliteDb.prepare(
+    'INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime(\'now\')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime(\'now\')'
+  ).run(key, strValue);
+  // 如果配置了 Supabase，同时写入远程
+  if (supabase) {
+    await supabase.from('settings').upsert({ key, value: strValue, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  }
+}
+
+// 启动时迁移
+migrateFromJsonIfNeeded();
+
+// 导出供其他模块使用
+export { readSettings };
+
+router.get('/api/settings', async (req, res) => {
+  res.json({ success: true, data: await readSettings() });
 });
 
 router.post('/api/settings', async (req, res) => {
   try {
-    const current = readSettings();
+    const current = await readSettings();
     const merged = { ...current, ...req.body };
-    await fsWriteFile(settingsPath, JSON.stringify(merged, null, 2), 'utf8');
+    for (const [key, value] of Object.entries(req.body)) {
+      await writeSetting(key, value);
+    }
     res.json({ success: true, data: merged });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -154,8 +209,8 @@ async function execSetupScript(provider, config) {
   }
 }
 
-router.get('/api/settings/claude-config', (req, res) => {
-  const settings = readSettings();
+router.get('/api/settings/claude-config', async (req, res) => {
+  const settings = await readSettings();
   const config = settings.claudeConfig;
   if (!config || !config.provider) {
     return res.json({ success: true, data: null });
@@ -181,7 +236,7 @@ router.post('/api/settings/claude-config', async (req, res) => {
     if (!provider) return res.status(400).json({ success: false, error: '请选择提供商' });
 
     // 合并：如果前端没发送 key（mask 值），保留原有 key
-    const current = readSettings();
+    const current = await readSettings();
     const oldConfig = current.claudeConfig || {};
     const newConfig = {
       provider,
@@ -192,9 +247,8 @@ router.post('/api/settings/claude-config', async (req, res) => {
       proxyKey: (proxyKey && !proxyKey.startsWith('****')) ? proxyKey : oldConfig.proxyKey || ''
     };
 
-    // 保存到 settings.json
-    current.claudeConfig = newConfig;
-    await fsWriteFile(settingsPath, JSON.stringify(current, null, 2), 'utf8');
+    // 保存到数据库
+    await writeSetting('claudeConfig', newConfig);
 
     // 写入 Claude CLI 配置
     if (provider === 'zhipu' || provider === 'proxy') {
@@ -213,9 +267,11 @@ router.post('/api/settings/claude-config', async (req, res) => {
 
 router.delete('/api/settings/claude-config', async (req, res) => {
   try {
-    const current = readSettings();
-    delete current.claudeConfig;
-    await fsWriteFile(settingsPath, JSON.stringify(current, null, 2), 'utf8');
+    if (supabase) {
+      await supabase.from('settings').delete().eq('key', 'claudeConfig');
+    } else {
+      sqliteDb.prepare('DELETE FROM settings WHERE key = ?').run('claudeConfig');
+    }
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });

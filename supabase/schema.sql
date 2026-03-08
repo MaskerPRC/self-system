@@ -32,3 +32,10 @@ CREATE TABLE interactive_pages (
 CREATE INDEX idx_messages_conversation ON messages(conversation_id);
 CREATE INDEX idx_pages_conversation ON interactive_pages(conversation_id);
 CREATE INDEX idx_pages_status ON interactive_pages(status);
+
+-- 系统设置
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);

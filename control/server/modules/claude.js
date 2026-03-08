@@ -4,6 +4,7 @@ import { resolve as pathResolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { broadcast } from './websocket.js';
 import { getSkillsForPrompt } from './skills.js';
+import { sqliteDb } from './sqlite.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -70,10 +71,10 @@ function runClaude(prompt, projectRoot, conversationId) {
   return new Promise((res, reject) => {
     let model = process.env.CLAUDE_MODEL || 'opus';
     try {
-      const settingsPath = pathResolve(__dirname, '../settings.json');
-      if (existsSync(settingsPath)) {
-        const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
-        if (settings.claudeConfig?.model) model = settings.claudeConfig.model;
+      const row = sqliteDb.prepare("SELECT value FROM settings WHERE key = 'claudeConfig'").get();
+      if (row) {
+        const config = JSON.parse(row.value);
+        if (config.model) model = config.model;
       }
     } catch {}
 
@@ -179,11 +180,8 @@ export async function callClaudeCode(requirement, conversationId, history = [], 
   // 加载 UI 风格设置
   let uiStyle = '';
   try {
-    const settingsPath = pathResolve(__dirname, '../settings.json');
-    if (existsSync(settingsPath)) {
-      const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
-      if (settings.uiStyle) uiStyle = settings.uiStyle;
-    }
+    const row = sqliteDb.prepare("SELECT value FROM settings WHERE key = 'uiStyle'").get();
+    if (row) uiStyle = row.value;
   } catch {}
   if (!uiStyle) {
     uiStyle = '现代简约风格，使用 Tailwind CSS 4。配色以白色/浅灰为主背景，搭配一个品牌强调色。圆角卡片布局，适当留白，字体清晰易读。响应式设计，移动端友好。';

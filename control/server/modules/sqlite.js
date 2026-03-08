@@ -57,6 +57,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
   CREATE INDEX IF NOT EXISTS idx_pages_conversation ON interactive_pages(conversation_id);
   CREATE INDEX IF NOT EXISTS idx_pages_status ON interactive_pages(status);
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // ==================== 辅助函数 ====================
@@ -376,4 +382,5 @@ class SqliteClient {
 }
 
 export const sqliteClient = new SqliteClient();
+export { db as sqliteDb };
 export default sqliteClient;
