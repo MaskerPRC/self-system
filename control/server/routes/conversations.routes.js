@@ -222,7 +222,9 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
         }
 
         // 1. 提取 Skill 信息（在所有分支之前，确保不会被 early return 跳过）
-        const skillInfo = await extractAndSaveSkill(result.stdout);
+        const skillInfos = await extractAndSaveSkill(result.stdout);
+        // 兼容：取第一个用于单 skill 场景
+        const skillInfo = skillInfos ? skillInfos[0] : null;
 
         // 2. 检查是否为简单回复 [RESPONSE]
         const responseText = extractResponse(result.stdout);
@@ -232,14 +234,14 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
           const scannedFiles = scanNewFiles(tempDir, existingTempFiles, conversationId);
           responseFiles = mergeFileAttachments(responseFiles, scannedFiles);
           const responseAttachments = [...responseFiles];
-          if (skillInfo) responseAttachments.push({ type: 'skill_created', name: skillInfo.name, description: skillInfo.description });
+          if (skillInfos) skillInfos.forEach(s => responseAttachments.push({ type: 'skill_created', name: s.name, description: s.description }));
           const insertData = { conversation_id: conversationId, role: 'assistant', content: responseText };
           if (responseAttachments.length > 0) insertData.attachments = responseAttachments;
 
           await supabase.from('messages').insert(insertData);
 
           clearProcessing(conversationId);
-          broadcast({ type: 'completed', conversationId, requestId, message: '完成', skill: skillInfo });
+          broadcast({ type: 'completed', conversationId, requestId, message: '完成', skill: skillInfos });
           return;
         }
 
@@ -305,7 +307,7 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
         }
 
         // 3.5 Git 自动提交代码变更
-        if (pageInfo || skillInfo) {
+        if (pageInfo || skillInfos) {
           try {
             const gitResult = await commitChanges(`feat: ${content.trim().slice(0, 150)}`);
             if (gitResult.committed) console.log(`[Git] ${gitResult.commitHash}`);
@@ -322,7 +324,7 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
 
         const allAttachments = [...fileAttachments];
         if (pageInfo) allAttachments.push({ type: 'page_created', name: pageInfo.title, route: pageInfo.routePath });
-        if (skillInfo) allAttachments.push({ type: 'skill_created', name: skillInfo.name, description: skillInfo.description });
+        if (skillInfos) skillInfos.forEach(s => allAttachments.push({ type: 'skill_created', name: s.name, description: s.description }));
 
         const assistantInsert = { conversation_id: conversationId, role: 'assistant', content: reply };
         if (allAttachments.length > 0) assistantInsert.attachments = allAttachments;
@@ -330,7 +332,7 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
         await supabase.from('messages').insert(assistantInsert);
 
         clearProcessing(conversationId);
-        broadcast({ type: 'completed', conversationId, requestId, message: '完成', page: pageInfo, skill: skillInfo });
+        broadcast({ type: 'completed', conversationId, requestId, message: '完成', page: pageInfo, skill: skillInfos });
       } catch (error) {
         console.error('[Server] Claude Code 失败:', error);
 

@@ -72,25 +72,29 @@ export function extractFileInfo(output) {
 }
 
 /**
- * 从 Claude 输出中提取 Skill 信息并自动保存
+ * 从 Claude 输出中提取 Skill 信息并自动保存（支持多个）
  */
 export async function extractAndSaveSkill(output) {
-  const match = output.match(/\[SKILL_INFO\]\s*\n?\s*name:\s*(.+?)\s*\n\s*description:\s*(.+?)\s*\n\s*content:\s*([\s\S]*?)\s*\[\/SKILL_INFO\]/);
-  if (!match) return null;
+  const regex = /\[SKILL_INFO\]\s*\n?\s*name:\s*(.+?)\s*\n\s*description:\s*(.+?)\s*\n\s*content:\s*([\s\S]*?)\s*\[\/SKILL_INFO\]/g;
+  const skills = [];
+  let match;
 
-  const name = match[1].trim();
-  const description = match[2].trim();
-  const content = match[3].trim();
+  while ((match = regex.exec(output)) !== null) {
+    const name = match[1].trim();
+    const description = match[2].trim();
+    const content = match[3].trim();
 
-  // 自动保存 skill 文件
-  try {
-    await createSkill(name, description, content);
-    console.log(`[Skills] 已自动创建 Skill: ${name}`);
-  } catch (e) {
-    console.error(`[Skills] 创建 Skill 失败: ${e.message}`);
+    try {
+      await createSkill(name, description, content);
+      console.log(`[Skills] 已自动创建 Skill: ${name}`);
+    } catch (e) {
+      console.error(`[Skills] 创建 Skill 失败 (${name}): ${e.message}`);
+    }
+
+    skills.push({ name, description });
   }
 
-  return { name, description };
+  return skills.length > 0 ? skills : null;
 }
 
 export function extractPageInfo(output, requirement) {
