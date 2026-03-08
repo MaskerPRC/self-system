@@ -1,5 +1,5 @@
 import { spawn, execSync } from 'child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, chownSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, chownSync, unlinkSync } from 'fs';
 import { resolve as pathResolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { broadcast } from './websocket.js';
@@ -64,6 +64,7 @@ export async function checkClaudeCode() {
 
 /**
  * 执行 Claude Code CLI（底层方法）
+ * prompt 写入临时文件，-p 参数只传短指令引用该文件，避免命令行参数超过 ARG_MAX 限制（E2BIG）
  */
 function runClaude(prompt, projectRoot, conversationId) {
   return new Promise((res, reject) => {
@@ -75,7 +76,15 @@ function runClaude(prompt, projectRoot, conversationId) {
         if (settings.claudeConfig?.model) model = settings.claudeConfig.model;
       }
     } catch {}
-    const claudeArgs = ['--model', model, '--dangerously-skip-permissions', '-p', prompt];
+
+    // 将 prompt 写入临时文件，避免命令行参数过长导致 E2BIG
+    const promptFileName = `.prompt-${conversationId || Date.now()}.md`;
+    const promptFile = pathResolve(projectRoot, 'app', 'temp', promptFileName);
+    mkdirSync(pathResolve(projectRoot, 'app', 'temp'), { recursive: true });
+    writeFileSync(promptFile, prompt, 'utf8');
+
+    const claudeArgs = ['--model', model, '--dangerously-skip-permissions', '-p',
+      `Read the file app/temp/${promptFileName} for your complete instructions, then follow them exactly. Do NOT summarize or describe the file — execute the instructions within it.`];
     const spawnEnv = { ...process.env };
 
     // 以非 root 用户运行（--dangerously-skip-permissions 要求）
@@ -122,6 +131,7 @@ function runClaude(prompt, projectRoot, conversationId) {
     });
 
     claude.on('close', (code) => {
+      try { unlinkSync(promptFile); } catch {}
       activeProcesses.delete(conversationId);
       if (aborted) {
         reject(new Error('任务已被用户中断'));
@@ -133,6 +143,7 @@ function runClaude(prompt, projectRoot, conversationId) {
     });
 
     claude.on('error', (error) => {
+      try { unlinkSync(promptFile); } catch {}
       activeProcesses.delete(conversationId);
       reject(new Error(`启动 Claude Code 失败: ${error.message}`));
     });
