@@ -29,6 +29,7 @@
       :todoContent="todoContent"
       :watchMsgIds="watchMsgIds"
       :pages="pages"
+      :skills="skills"
       @send="handleSend"
       @cancel="cancelTask"
       @toggle-sidebar="showSidebar = !showSidebar"
@@ -84,12 +85,22 @@ let todoTimer = null
 
 // App pages 列表（用于 @mention）
 const pages = ref([])
+// Skills 列表（用于 @mention）
+const skills = ref([])
 
 async function fetchPages() {
   try {
     const r = await fetch(`${API}/api/pages`)
     const d = await r.json()
     if (d.success) pages.value = d.data || []
+  } catch {}
+}
+
+async function fetchSkills() {
+  try {
+    const r = await fetch(`${API}/api/skills`)
+    const d = await r.json()
+    if (d.success) skills.value = d.data || []
   } catch {}
 }
 
@@ -218,7 +229,7 @@ async function renameConv(id, title) {
 }
 
 async function sendMessage(payload) {
-  const { content, files, targetApps } = payload
+  const { content, files, targetApps, targetSkills } = payload
   if (!activeId.value) return
   if (!content?.trim() && (!files || !files.length)) return
 
@@ -253,7 +264,8 @@ async function sendMessage(payload) {
     body: JSON.stringify({
       content: content?.trim() || '',
       attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
-      targetApps: targetApps || undefined
+      targetApps: targetApps || undefined,
+      targetSkills: targetSkills || undefined
     })
   })
 }
@@ -414,6 +426,7 @@ watch(isProcessing, (val) => {
 onMounted(() => {
   fetchConvs()
   fetchPages()
+  fetchSkills()
   connectWs()
   window.addEventListener('switch-conversation', onSwitchConversation)
 })

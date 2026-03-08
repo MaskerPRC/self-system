@@ -162,13 +162,21 @@
             <span class="text-brand-600 text-sm font-medium">释放以添加文件</span>
           </div>
 
-          <!-- Selected apps tags -->
-          <div v-if="selectedApps.length" class="flex flex-wrap gap-1.5 px-5 pt-3 pb-1">
+          <!-- Selected apps & skills tags -->
+          <div v-if="selectedApps.length || selectedSkills.length" class="flex flex-wrap gap-1.5 px-5 pt-3 pb-1">
             <span v-for="app in selectedApps" :key="app.id"
               class="inline-flex items-center gap-1 bg-brand-50 text-brand-600 rounded-full px-2.5 py-1 text-xs font-medium border border-brand-100">
               <i class="ph ph-browser text-xs"></i>
               {{ app.title }}
               <button @click="removeApp(app.id)" class="text-brand-400 hover:text-red-500 transition-colors ml-0.5">
+                <i class="ph ph-x text-[10px]"></i>
+              </button>
+            </span>
+            <span v-for="skill in selectedSkills" :key="skill.name"
+              class="inline-flex items-center gap-1 bg-amber-50 text-amber-600 rounded-full px-2.5 py-1 text-xs font-medium border border-amber-100">
+              <i class="ph ph-lightning text-xs"></i>
+              {{ skill.name }}
+              <button @click="removeSkill(skill.name)" class="text-amber-400 hover:text-red-500 transition-colors ml-0.5">
                 <i class="ph ph-x text-[10px]"></i>
               </button>
             </span>
@@ -193,7 +201,7 @@
           <textarea
             ref="inputRef"
             v-model="text"
-            @keydown.enter.exact.prevent="showMention && filteredApps.length ? selectApp(filteredApps[mentionIndex]) : send()"
+            @keydown.enter.exact.prevent="showMention && filteredMentionItems.length ? selectMentionItem(filteredMentionItems[mentionIndex]) : send()"
             @keydown="onMentionKeydown"
             @input="onInput"
             @paste="onPaste"
@@ -201,21 +209,27 @@
             :disabled="isProcessing"
             rows="1"
             class="w-full bg-transparent border-0 outline-none resize-none py-4 pl-14 pr-14 text-ink-900 placeholder-ink-400 max-h-[160px] disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
-            placeholder="输入需求... 输入 @ 选择目标应用"
+            placeholder="输入需求... 输入 @ 选择页面或 Skill"
           ></textarea>
 
           <!-- @mention dropdown -->
-          <div v-if="showMention && filteredApps.length"
+          <div v-if="showMention && filteredMentionItems.length"
             class="absolute left-4 right-4 bottom-full mb-2 bg-paper border border-stone-200 rounded-2xl shadow-xl overflow-hidden z-20 max-h-[240px] overflow-y-auto">
-            <div v-for="(app, i) in filteredApps" :key="app.id"
-              @mousedown.prevent="selectApp(app)"
+            <div v-for="(item, i) in filteredMentionItems" :key="item._type + '-' + (item.id || item.name)"
+              @mousedown.prevent="selectMentionItem(item)"
               class="flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors"
               :class="i === mentionIndex ? 'bg-brand-50 text-brand-700' : 'hover:bg-stone-50 text-ink-700'">
-              <i class="ph ph-browser text-base" :class="i === mentionIndex ? 'text-brand-500' : 'text-ink-400'"></i>
+              <i :class="item._type === 'skill'
+                ? (i === mentionIndex ? 'ph ph-lightning text-base text-amber-500' : 'ph ph-lightning text-base text-ink-400')
+                : (i === mentionIndex ? 'ph ph-browser text-base text-brand-500' : 'ph ph-browser text-base text-ink-400')"></i>
               <div class="min-w-0 flex-1">
-                <div class="text-sm font-medium truncate">{{ app.title }}</div>
-                <div class="text-xs text-ink-400 truncate">{{ app.route_path }}</div>
+                <div class="text-sm font-medium truncate">{{ item._type === 'skill' ? item.name : item.title }}</div>
+                <div class="text-xs text-ink-400 truncate">{{ item._type === 'skill' ? item.description : item.route_path }}</div>
               </div>
+              <span class="text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
+                :class="item._type === 'skill' ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'">
+                {{ item._type === 'skill' ? 'Skill' : '页面' }}
+              </span>
             </div>
           </div>
 
@@ -343,7 +357,8 @@ const props = defineProps({
   chatTitle: { type: String, default: '选择一个对话' },
   todoContent: { type: String, default: null },
   watchMsgIds: { type: Array, default: () => [] },
-  pages: { type: Array, default: () => [] }
+  pages: { type: Array, default: () => [] },
+  skills: { type: Array, default: () => [] }
 })
 const emit = defineEmits(['send', 'toggle-sidebar', 'cancel', 'toggle-watch-msg'])
 
@@ -362,20 +377,33 @@ const fileDrawerMsgId = ref(null)
 
 // @mention 功能
 const selectedApps = ref([])
+const selectedSkills = ref([])
 const showMention = ref(false)
 const mentionQuery = ref('')
 const mentionIndex = ref(0)
 const mentionStartPos = ref(-1)
 
-const filteredApps = computed(() => {
+const filteredMentionItems = computed(() => {
   const q = mentionQuery.value.toLowerCase()
-  const selectedIds = new Set(selectedApps.value.map(a => a.id))
-  const available = props.pages.filter(p => !selectedIds.has(p.id))
-  if (!q) return available
-  return available.filter(p =>
-    (p.title || '').toLowerCase().includes(q) ||
-    (p.route_path || '').toLowerCase().includes(q)
-  )
+  const selectedAppIds = new Set(selectedApps.value.map(a => a.id))
+  const selectedSkillNames = new Set(selectedSkills.value.map(s => s.name))
+  const items = []
+
+  // 页面
+  const availablePages = props.pages.filter(p => !selectedAppIds.has(p.id))
+  const matchedPages = q
+    ? availablePages.filter(p => (p.title || '').toLowerCase().includes(q) || (p.route_path || '').toLowerCase().includes(q))
+    : availablePages
+  matchedPages.forEach(p => items.push({ ...p, _type: 'app' }))
+
+  // Skills
+  const availableSkills = props.skills.filter(s => !selectedSkillNames.has(s.name))
+  const matchedSkills = q
+    ? availableSkills.filter(s => (s.name || '').toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q))
+    : availableSkills
+  matchedSkills.forEach(s => items.push({ ...s, _type: 'skill' }))
+
+  return items
 })
 
 function getFileAttachments(attachments) {
@@ -411,11 +439,13 @@ function send() {
   emit('send', {
     content: text.value,
     files: [...pendingFiles.value],
-    targetApps: selectedApps.value.length > 0 ? selectedApps.value.map(a => ({ id: a.id, title: a.title, route_path: a.route_path })) : undefined
+    targetApps: selectedApps.value.length > 0 ? selectedApps.value.map(a => ({ id: a.id, title: a.title, route_path: a.route_path })) : undefined,
+    targetSkills: selectedSkills.value.length > 0 ? selectedSkills.value.map(s => ({ name: s.name, description: s.description })) : undefined
   })
   text.value = ''
   pendingFiles.value = []
   selectedApps.value = []
+  selectedSkills.value = []
   showMention.value = false
   if (inputRef.value) inputRef.value.style.height = 'auto'
 }
@@ -436,8 +466,12 @@ function onInput(e) {
   }
 }
 
-function selectApp(app) {
-  selectedApps.value = [...selectedApps.value, app]
+function selectMentionItem(item) {
+  if (item._type === 'skill') {
+    selectedSkills.value = [...selectedSkills.value, item]
+  } else {
+    selectedApps.value = [...selectedApps.value, item]
+  }
   // 移除输入框中的 @xxx 文本
   const pos = mentionStartPos.value
   if (pos >= 0) {
@@ -454,19 +488,23 @@ function removeApp(appId) {
   selectedApps.value = selectedApps.value.filter(a => a.id !== appId)
 }
 
+function removeSkill(name) {
+  selectedSkills.value = selectedSkills.value.filter(s => s.name !== name)
+}
+
 function onMentionKeydown(e) {
-  if (!showMention.value || !filteredApps.value.length) return
+  if (!showMention.value || !filteredMentionItems.value.length) return
   if (e.key === 'ArrowDown') {
     e.preventDefault()
-    mentionIndex.value = (mentionIndex.value + 1) % filteredApps.value.length
+    mentionIndex.value = (mentionIndex.value + 1) % filteredMentionItems.value.length
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
-    mentionIndex.value = (mentionIndex.value - 1 + filteredApps.value.length) % filteredApps.value.length
+    mentionIndex.value = (mentionIndex.value - 1 + filteredMentionItems.value.length) % filteredMentionItems.value.length
   } else if (e.key === 'Enter' || e.key === 'Tab') {
-    if (showMention.value && filteredApps.value.length) {
+    if (showMention.value && filteredMentionItems.value.length) {
       e.preventDefault()
       e.stopPropagation()
-      selectApp(filteredApps.value[mentionIndex.value])
+      selectMentionItem(filteredMentionItems.value[mentionIndex.value])
     }
   } else if (e.key === 'Escape') {
     showMention.value = false

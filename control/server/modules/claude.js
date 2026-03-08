@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, chownSync, unlinkSy
 import { resolve as pathResolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { broadcast } from './websocket.js';
-import { getSkillsForPrompt } from './skills.js';
+import { getSkillsForPrompt, getSkill } from './skills.js';
 import { sqliteDb } from './sqlite.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -157,7 +157,7 @@ function runClaude(prompt, projectRoot, conversationId) {
 /**
  * 调用 Claude Code 处理用户需求
  */
-export async function callClaudeCode(requirement, conversationId, history = [], attachments = [], targetApps = []) {
+export async function callClaudeCode(requirement, conversationId, history = [], attachments = [], targetApps = [], targetSkills = []) {
   const isInstalled = await checkClaudeCode();
   if (!isInstalled) throw new Error('Claude Code CLI 未安装或不可用');
 
@@ -169,10 +169,24 @@ export async function callClaudeCode(requirement, conversationId, history = [], 
   const tempDir = pathResolve(projectRoot, 'app', 'temp', conversationId);
   mkdirSync(tempDir, { recursive: true });
 
-  // 加载已安装的 Skills
+  // 加载 Skills
   let skillsSection = '';
   try {
-    skillsSection = await getSkillsForPrompt();
+    if (targetSkills && targetSkills.length > 0) {
+      // 用户指定了特定 Skills，只加载这些
+      const parts = [];
+      for (const ts of targetSkills) {
+        const skill = await getSkill(ts.name);
+        if (skill) {
+          parts.push(`### Skill: ${skill.name}\n${skill.description}\n\n${skill.content}`);
+        }
+      }
+      if (parts.length > 0) {
+        skillsSection = `\n【⚠️ 用户指定使用以下 Skills - 必须严格按照 Skill 内容执行】\n${parts.join('\n\n---\n\n')}\n`;
+      }
+    } else {
+      skillsSection = await getSkillsForPrompt();
+    }
   } catch (e) {
     console.warn('[Claude] 加载 Skills 失败:', e.message);
   }

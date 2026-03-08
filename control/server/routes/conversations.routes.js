@@ -104,7 +104,7 @@ router.get('/api/conversations/:id/messages', async (req, res) => {
 
 // 发送消息（核心：触发 Claude Code 修改应用项目）
 router.post('/api/conversations/:id/messages', async (req, res) => {
-  const { content, attachments, targetApps } = req.body;
+  const { content, attachments, targetApps, targetSkills } = req.body;
   const conversationId = req.params.id;
 
   const hasAttachments = attachments && attachments.length > 0;
@@ -203,7 +203,7 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
           }
         } catch {}
 
-        const result = await callClaudeCode(msgContent || '请查看我上传的文件', conversationId, history, attachments, targetApps);
+        const result = await callClaudeCode(msgContent || '请查看我上传的文件', conversationId, history, attachments, targetApps, targetSkills);
 
         // 抢救被误放到 app/temp/ 根目录的文件
         await rescueMisplacedFiles(tempRootDir, tempDir, existingTempRootFiles, conversationId);
