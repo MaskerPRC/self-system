@@ -80,12 +80,14 @@ function runClaude(prompt, projectRoot, conversationId) {
 
     // 将 prompt 写入临时文件，避免命令行参数过长导致 E2BIG
     const promptFileName = `.prompt-${conversationId || Date.now()}.md`;
-    const promptFile = pathResolve(projectRoot, 'app', 'temp', promptFileName);
-    mkdirSync(pathResolve(projectRoot, 'app', 'temp'), { recursive: true });
+    const promptDir = pathResolve(projectRoot, 'app', 'temp', conversationId || 'default');
+    mkdirSync(promptDir, { recursive: true });
+    const promptFile = pathResolve(promptDir, promptFileName);
     writeFileSync(promptFile, prompt, 'utf8');
 
+    const promptRelPath = `app/temp/${conversationId || 'default'}/${promptFileName}`;
     const claudeArgs = ['--model', model, '--dangerously-skip-permissions', '-p',
-      `Read the file app/temp/${promptFileName} for your complete instructions, then follow them exactly. Do NOT summarize or describe the file — execute the instructions within it.`];
+      `Read the file ${promptRelPath} for your complete instructions, then follow them exactly. Do NOT summarize or describe the file — execute the instructions within it.`];
     const spawnEnv = { ...process.env };
 
     // 以非 root 用户运行（--dangerously-skip-permissions 要求）
