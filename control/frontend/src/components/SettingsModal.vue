@@ -468,7 +468,7 @@ const remotePushing = ref(false)
 const remoteMessage = ref('')
 const remoteMessageError = ref(false)
 
-const DEFAULT_UI_STYLE = '现代简约风格，使用 Tailwind CSS 4。配色以白色/浅灰为主背景，搭配一个品牌强调色。圆角卡片布局，适当留白，字体清晰易读。响应式设计，移动端友好。'
+const DEFAULT_UI_STYLE = '黑白新粗野风格（Neo-Brutalism），使用 Tailwind CSS 4。纯黑白配色为主，粗黑边框（2-4px solid black），无圆角或极小圆角，粗体大字排版，强对比色块，按钮带实色阴影偏移（shadow-[4px_4px_0_black]），布局大胆直接，留白克制。响应式设计，移动端友好。'
 const uiStyle = ref(DEFAULT_UI_STYLE)
 const uiStyleSaving = ref(false)
 const uiStyleMessage = ref('')
