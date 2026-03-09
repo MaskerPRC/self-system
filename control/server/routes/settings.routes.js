@@ -28,7 +28,7 @@ router.get('/api/config', (req, res) => {
 // ==================== 设置 API（DB 持久化） ====================
 
 const DEFAULT_SETTINGS = {
-  uiStyle: '现代简约风格，使用 Tailwind CSS 4。配色以白色/浅灰为主背景，搭配一个品牌强调色。圆角卡片布局，适当留白，字体清晰易读。响应式设计，移动端友好。'
+  uiStyle: '黑白新粗野风格（Neo-Brutalism），使用 Tailwind CSS 4。纯黑白配色为主，粗黑边框（2-4px solid black），无圆角或极小圆角，粗体大字排版，强对比色块，按钮带实色阴影偏移（shadow-[4px_4px_0_black]），布局大胆直接，留白克制。响应式设计，移动端友好。'
 };
 
 // 从旧 settings.json 迁移数据到 DB（仅执行一次）
@@ -279,11 +279,6 @@ router.delete('/api/settings/claude-config', async (req, res) => {
 });
 
 // ==================== OpenRouter 配置 API ====================
-
-function maskKey(k) {
-  if (!k || k.length <= 4) return k ? '****' : '';
-  return '****' + k.slice(-4);
-}
 
 router.get('/api/settings/openrouter-config', async (req, res) => {
   try {

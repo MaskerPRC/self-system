@@ -98,19 +98,18 @@ export async function extractAndSaveSkill(output) {
 }
 
 export function extractPageInfo(output, requirement) {
-  // 如果输出中没有 [PAGE_INFO] 标记，直接返回 null
-  // 避免在 skill-only 请求中错误地生成页面信息
-  const pageInfoMatch = output.match(/\[PAGE_INFO\]\s*\n?\s*route:\s*(\S+)\s*\n?\s*title:\s*(.+?)\s*\n?(?:\s*public:\s*(true|false)\s*\n?)?\s*\[\/PAGE_INFO\]/);
-  if (pageInfoMatch) {
-    return {
-      title: pageInfoMatch[2].trim(),
+  const regex = /\[PAGE_INFO\]\s*\n?\s*route:\s*(\S+)\s*\n?\s*title:\s*(.+?)\s*\n?(?:\s*public:\s*(true|false)\s*\n?)?\s*\[\/PAGE_INFO\]/g;
+  const pages = [];
+  let match;
+  while ((match = regex.exec(output)) !== null) {
+    pages.push({
+      title: match[2].trim(),
       description: requirement.slice(0, 200),
-      routePath: pageInfoMatch[1],
-      isPublic: pageInfoMatch[3] === 'true'
-    };
+      routePath: match[1],
+      isPublic: match[3] === 'true'
+    });
   }
-
-  return null;
+  return pages.length > 0 ? pages : null;
 }
 
 /**

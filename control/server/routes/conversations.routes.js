@@ -272,55 +272,52 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
           return;
         }
 
-        // 3. 提取页面信息（优先从 Gemini 结构化输出，其次路由 diff 自动检测）
-        let pageInfo = extractPageInfo(parseSource, content?.trim() || '');
+        // 3. 提取页面信息（支持多个，优先从 Gemini 结构化输出，其次路由 diff 自动检测）
+        let pageInfos = extractPageInfo(parseSource, content?.trim() || '');
 
-        if (!pageInfo && newRoutes.length > 0) {
-          const newRoute = newRoutes[0];
-          const title = newRoute.name.replace(/([A-Z])/g, ' $1').trim();
-          pageInfo = {
-            title,
+        if (!pageInfos && newRoutes.length > 0) {
+          pageInfos = newRoutes.map(r => ({
+            title: r.name.replace(/([A-Z])/g, ' $1').trim(),
             description: content?.trim().slice(0, 200) || '',
-            routePath: newRoute.path,
+            routePath: r.path,
             isPublic: false
-          };
-          console.log(`[PageDetect] 路由 diff 兜底: ${newRoute.path} (${title})`);
+          }));
+          console.log(`[PageDetect] 路由 diff 兜底: ${newRoutes.map(r => r.path).join(', ')}`);
         }
 
-        if (pageInfo) {
-          // 检查该路由是否已有页面记录
-          const { data: existingPage } = await supabase
-            .from('interactive_pages')
-            .select('id')
-            .eq('route_path', pageInfo.routePath)
-            .maybeSingle();
+        if (pageInfos) {
+          for (const pageInfo of pageInfos) {
+            const { data: existingPage } = await supabase
+              .from('interactive_pages')
+              .select('id')
+              .eq('route_path', pageInfo.routePath)
+              .maybeSingle();
 
-          if (existingPage) {
-            // 已有页面：更新属性（如 public 状态）
-            const updateData = { updated_at: new Date().toISOString() };
-            if (pageInfo.isPublic !== undefined) updateData.is_public = pageInfo.isPublic;
-            if (pageInfo.title) updateData.title = pageInfo.title;
-            await supabase
-              .from('interactive_pages')
-              .update(updateData)
-              .eq('id', existingPage.id);
-          } else {
-            // 新页面：插入记录
-            await supabase
-              .from('interactive_pages')
-              .insert({
-                conversation_id: conversationId,
-                title: pageInfo.title,
-                description: pageInfo.description,
-                route_path: pageInfo.routePath,
-                status: 'active',
-                is_public: pageInfo.isPublic || false
-              });
+            if (existingPage) {
+              const updateData = { updated_at: new Date().toISOString() };
+              if (pageInfo.isPublic !== undefined) updateData.is_public = pageInfo.isPublic;
+              if (pageInfo.title) updateData.title = pageInfo.title;
+              await supabase
+                .from('interactive_pages')
+                .update(updateData)
+                .eq('id', existingPage.id);
+            } else {
+              await supabase
+                .from('interactive_pages')
+                .insert({
+                  conversation_id: conversationId,
+                  title: pageInfo.title,
+                  description: pageInfo.description,
+                  route_path: pageInfo.routePath,
+                  status: 'active',
+                  is_public: pageInfo.isPublic || false
+                });
+            }
           }
         }
 
         // 3.5 Git 自动提交代码变更
-        if (pageInfo || skillInfos) {
+        if (pageInfos || skillInfos) {
           try {
             const gitResult = await commitChanges(`feat: ${content.trim().slice(0, 150)}`);
             if (gitResult.committed) console.log(`[Git] ${gitResult.commitHash}`);
@@ -334,7 +331,7 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
         const reply = naturalText || '需求处理完成';
 
         const allAttachments = [...fileAttachments];
-        if (pageInfo) allAttachments.push({ type: 'page_created', name: pageInfo.title, route: pageInfo.routePath });
+        if (pageInfos) pageInfos.forEach(p => allAttachments.push({ type: 'page_created', name: p.title, route: p.routePath }));
         if (skillInfos) skillInfos.forEach(s => allAttachments.push({ type: 'skill_created', name: s.name, description: s.description }));
 
         const assistantInsert = { conversation_id: conversationId, role: 'assistant', content: reply };
@@ -343,7 +340,7 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
         await supabase.from('messages').insert(assistantInsert);
 
         clearProcessing(conversationId);
-        broadcast({ type: 'completed', conversationId, requestId, message: '完成', page: pageInfo, skill: skillInfos });
+        broadcast({ type: 'completed', conversationId, requestId, message: '完成', pages: pageInfos, skill: skillInfos });
       } catch (error) {
         console.error('[Server] Claude Code 失败:', error);
 
