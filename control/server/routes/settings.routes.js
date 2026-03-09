@@ -278,4 +278,77 @@ router.delete('/api/settings/claude-config', async (req, res) => {
   }
 });
 
+// ==================== OpenRouter 配置 API ====================
+
+function maskKey(k) {
+  if (!k || k.length <= 4) return k ? '****' : '';
+  return '****' + k.slice(-4);
+}
+
+router.get('/api/settings/openrouter-config', async (req, res) => {
+  try {
+    // 优先读 DB，其次环境变量
+    const settings = await readSettings();
+    const dbConfig = settings.openrouterConfig;
+    if (dbConfig && dbConfig.apiKey) {
+      return res.json({
+        success: true,
+        data: {
+          apiKey: maskKey(dbConfig.apiKey),
+          hasApiKey: true,
+          model: dbConfig.model || 'google/gemini-2.5-flash',
+          source: 'db'
+        }
+      });
+    }
+    // 环境变量
+    const envKey = process.env.OPENROUTER_API_KEY;
+    if (envKey) {
+      return res.json({
+        success: true,
+        data: {
+          apiKey: maskKey(envKey),
+          hasApiKey: true,
+          model: process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash',
+          source: 'env'
+        }
+      });
+    }
+    res.json({ success: true, data: null });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+router.post('/api/settings/openrouter-config', async (req, res) => {
+  try {
+    const { apiKey, model } = req.body;
+    const settings = await readSettings();
+    const oldConfig = settings.openrouterConfig || {};
+
+    const newConfig = {
+      apiKey: (apiKey && !apiKey.startsWith('****')) ? apiKey : oldConfig.apiKey || '',
+      model: model || 'google/gemini-2.5-flash'
+    };
+
+    await writeSetting('openrouterConfig', newConfig);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+router.delete('/api/settings/openrouter-config', async (req, res) => {
+  try {
+    if (supabase) {
+      await supabase.from('settings').delete().eq('key', 'openrouterConfig');
+    } else {
+      sqliteDb.prepare('DELETE FROM settings WHERE key = ?').run('openrouterConfig');
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 export default router;

@@ -12,6 +12,7 @@ import { commitChanges } from '../modules/git.js';
 import { broadcast, markProcessing, clearProcessing, markQueued, clearQueued, getProcessingList, getQueuedList } from '../modules/websocket.js';
 import { requestQueue, abortedConversations } from '../modules/queue.js';
 import { extractNaturalText, extractResponse, extractFileInfo, extractAndSaveSkill, extractPageInfo, parseRoutePaths } from '../helpers/output-parser.js';
+import { extractStructuredOutput, isOpenRouterConfigured } from '../modules/openrouter.js';
 import { collectAllFiles, scanNewFiles, mergeFileAttachments, rescueMisplacedFiles, verifyAppAfterChange } from '../helpers/file-utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -215,23 +216,49 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
             const newFiles = afterFiles.filter(f => !existingTempFiles.has(f));
             console.log(`[FileDebug] temp 目录 ${tempDir}: 之前 ${existingTempFiles.size} 个文件, 之后 ${afterFiles.length} 个文件, 新增 ${newFiles.length} 个: ${newFiles.join(', ')}`);
           } else {
-            console.log(`[FileDebug] temp 目录不存在: ${tempDir}`);
+            console.log(`[FileDebug] 目录不存在: ${tempDir}`);
           }
         } catch (e) {
           console.log(`[FileDebug] 扫描失败: ${e.message}`);
         }
 
-        // 1. 提取 Skill 信息（在所有分支之前，确保不会被 early return 跳过）
-        const skillInfos = await extractAndSaveSkill(result.stdout);
-        // 兼容：取第一个用于单 skill 场景
-        const skillInfo = skillInfos ? skillInfos[0] : null;
+        // ===== 检测路由变化（用于 Gemini 二次处理） =====
+        let newRoutes = [];
+        try {
+          const afterRoutes = parseRoutePaths(readFileSync(routerFilePath, 'utf8'));
+          const beforePaths = new Set(beforeRoutes.map(r => r.path));
+          newRoutes = afterRoutes.filter(r => !beforePaths.has(r.path));
+          if (newRoutes.length > 0) {
+            console.log(`[RouteDetect] 检测到新路由: ${newRoutes.map(r => r.path).join(', ')}`);
+          }
+        } catch {}
+
+        // ===== 扫描新生成文件 =====
+        const scannedFiles = scanNewFiles(tempDir, existingTempFiles, conversationId);
+
+        // ===== 第二轮：Gemini 结构化提取 =====
+        let structuredOutput = null;
+        if (isOpenRouterConfigured()) {
+          broadcast({ type: 'processing', conversationId, requestId, message: '正在提取结构化信息...' });
+          structuredOutput = await extractStructuredOutput({
+            requirement: msgContent || '请查看我上传的文件',
+            claudeOutput: result.stdout,
+            newRoutes,
+            newFiles: scannedFiles,
+            hasCodeChanges: newRoutes.length > 0 || scannedFiles.length > 0
+          });
+        }
+
+        // 优先使用 Gemini 的结构化输出，否则回退到 Claude Code 自身的输出
+        const parseSource = structuredOutput || result.stdout;
+
+        // 1. 提取 Skill 信息
+        const skillInfos = await extractAndSaveSkill(parseSource);
 
         // 2. 检查是否为简单回复 [RESPONSE]
-        const responseText = extractResponse(result.stdout);
+        const responseText = extractResponse(parseSource);
         if (responseText) {
-          let responseFiles = extractFileInfo(result.stdout);
-          // 合并 scanNewFiles 结果，确保不遗漏文件
-          const scannedFiles = scanNewFiles(tempDir, existingTempFiles, conversationId);
+          let responseFiles = extractFileInfo(parseSource);
           responseFiles = mergeFileAttachments(responseFiles, scannedFiles);
           const responseAttachments = [...responseFiles];
           if (skillInfos) skillInfos.forEach(s => responseAttachments.push({ type: 'skill_created', name: s.name, description: s.description }));
@@ -245,27 +272,19 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
           return;
         }
 
-        // 3. 提取页面信息
-        let pageInfo = extractPageInfo(result.stdout, content.trim());
+        // 3. 提取页面信息（优先从 Gemini 结构化输出，其次路由 diff 自动检测）
+        let pageInfo = extractPageInfo(parseSource, content?.trim() || '');
 
-        // 如果 Claude 没输出 [PAGE_INFO] 标记，通过路由文件 diff 自动检测新增页面
-        if (!pageInfo) {
-          try {
-            const afterRoutes = parseRoutePaths(readFileSync(routerFilePath, 'utf8'));
-            const beforePaths = new Set(beforeRoutes.map(r => r.path));
-            const newRoutes = afterRoutes.filter(r => !beforePaths.has(r.path));
-            if (newRoutes.length > 0) {
-              const newRoute = newRoutes[0];
-              const title = newRoute.name.replace(/([A-Z])/g, ' $1').trim();
-              pageInfo = {
-                title,
-                description: content.trim().slice(0, 200),
-                routePath: newRoute.path,
-                isPublic: false
-              };
-              console.log(`[PageDetect] 自动检测到新路由: ${newRoute.path} (${title})`);
-            }
-          } catch {}
+        if (!pageInfo && newRoutes.length > 0) {
+          const newRoute = newRoutes[0];
+          const title = newRoute.name.replace(/([A-Z])/g, ' $1').trim();
+          pageInfo = {
+            title,
+            description: content?.trim().slice(0, 200) || '',
+            routePath: newRoute.path,
+            isPublic: false
+          };
+          console.log(`[PageDetect] 路由 diff 兜底: ${newRoute.path} (${title})`);
         }
 
         if (pageInfo) {
@@ -300,12 +319,6 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
           }
         }
 
-        // 3. 如果创建/修改了页面，重启应用并验证
-        if (pageInfo) {
-          broadcast({ type: 'processing', conversationId, requestId, message: '正在重启应用并验证...' });
-          await verifyAppAfterChange(conversationId, requestId, { broadcast, restartAppProject, getAppStatus, getAppLogs, verifyAndFixApp });
-        }
-
         // 3.5 Git 自动提交代码变更
         if (pageInfo || skillInfos) {
           try {
@@ -314,12 +327,10 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
           } catch (e) { console.error('[Git]', e.message); }
         }
 
-        // 4. 保存助手回复（包含 Claude 的自然语言描述）
+        // 4. 保存助手回复（使用 Claude Code 的自然语言描述作为正文）
         const naturalText = extractNaturalText(result.stdout);
-        let fileAttachments = extractFileInfo(result.stdout);
-        // 合并 scanNewFiles 结果，确保不遗漏文件
-        const scannedFiles2 = scanNewFiles(tempDir, existingTempFiles, conversationId);
-        fileAttachments = mergeFileAttachments(fileAttachments, scannedFiles2);
+        let fileAttachments = extractFileInfo(parseSource);
+        fileAttachments = mergeFileAttachments(fileAttachments, scannedFiles);
         const reply = naturalText || '需求处理完成';
 
         const allAttachments = [...fileAttachments];

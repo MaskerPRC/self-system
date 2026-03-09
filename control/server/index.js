@@ -9,6 +9,7 @@ import { getAppLogsSince, getControlLogsSince } from './modules/process.js';
 import { startHeartbeatChecker } from './modules/heartbeat.js';
 import { initGitRepo } from './modules/git.js';
 import { authMiddleware } from './modules/auth.js';
+import { initOpenRouterConfig, isOpenRouterConfigured } from './modules/openrouter.js';
 
 // 路由模块
 import authRoutes from './routes/auth.routes.js';
@@ -84,4 +85,13 @@ server.listen(PORT, '0.0.0.0', () => {
 
   // 初始化 Git 仓库（应用代码版本管理）
   initGitRepo().catch(e => console.warn('[Server] Git 初始化失败:', e.message));
+
+  // 如果设置了环境变量 OPENROUTER_API_KEY，且 DB 中尚无配置，则自动写入
+  if (process.env.OPENROUTER_API_KEY) {
+    initOpenRouterConfig(
+      process.env.OPENROUTER_API_KEY,
+      process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash'
+    );
+  }
+  console.log(`[OpenRouter] 二次结构化处理: ${isOpenRouterConfigured() ? '已启用' : '未配置（可在设置中添加）'}`);
 });

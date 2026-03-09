@@ -120,6 +120,66 @@
           <!-- Divider -->
           <div class="border-t border-stone-200 my-6"></div>
 
+          <!-- OpenRouter Config Section -->
+          <div>
+            <div class="mb-4">
+              <div class="flex items-center gap-2">
+                <h3 class="font-medium text-ink-900">OpenRouter 配置</h3>
+                <span v-if="openrouterStatus" class="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                  :class="openrouterStatus === 'db' ? 'bg-emerald-50 text-emerald-600' : 'bg-sky-50 text-sky-600'">
+                  {{ openrouterStatus === 'db' ? '已配置' : '来自环境变量' }}
+                </span>
+              </div>
+              <p class="text-xs text-ink-500 mt-0.5">用于二次结构化处理（Gemini Flash），自动提取页面/Skill 标记，解决格式丢失问题</p>
+            </div>
+
+            <div class="space-y-3">
+              <div>
+                <label class="text-xs font-medium text-ink-700 mb-1 block">API Key</label>
+                <div class="relative">
+                  <input
+                    :type="showOpenrouterKey ? 'text' : 'password'"
+                    v-model="openrouterConfig.apiKey"
+                    placeholder="sk-or-v1-..."
+                    class="w-full px-3 py-2 pr-9 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
+                  <button @click="showOpenrouterKey = !showOpenrouterKey"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-ink-400 hover:text-ink-700 transition-colors">
+                    <i :class="showOpenrouterKey ? 'ph ph-eye-slash' : 'ph ph-eye'" class="text-sm"></i>
+                  </button>
+                </div>
+                <p v-if="openrouterHasKey && !openrouterKeyChanged" class="text-[11px] text-emerald-600 mt-1">
+                  <i class="ph-fill ph-check-circle mr-0.5"></i>已配置（留空保持不变，输入新值可覆盖）
+                </p>
+              </div>
+
+              <div>
+                <label class="text-xs font-medium text-ink-700 mb-1 block">模型</label>
+                <input v-model="openrouterConfig.model"
+                  placeholder="google/gemini-2.5-flash"
+                  class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
+                <p class="text-[11px] text-ink-400 mt-1">默认：google/gemini-2.5-flash，也可使用其他 OpenRouter 支持的模型</p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button @click="saveOpenrouterConfig" :disabled="openrouterSaving"
+                  class="text-xs font-medium px-4 py-1.5 bg-brand-500 text-white rounded-full hover:bg-brand-600 disabled:opacity-40 transition-colors">
+                  {{ openrouterSaving ? '保存中...' : '保存' }}
+                </button>
+                <button v-if="openrouterHasKey && openrouterStatus === 'db'" @click="clearOpenrouterConfig"
+                  class="text-xs font-medium px-3 py-1.5 rounded-full border border-stone-200 text-ink-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors">
+                  清除配置
+                </button>
+              </div>
+              <div v-if="openrouterMessage" class="p-3 rounded-lg text-xs font-medium"
+                :class="openrouterError ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'">
+                {{ openrouterMessage }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Divider -->
+          <div class="border-t border-stone-200 my-6"></div>
+
           <!-- UI Style Section -->
           <div>
             <div class="mb-4">
@@ -375,6 +435,17 @@ const claudeConfigOriginalProxyKey = ref('')
 const claudeConfigKeyChanged = computed(() => claudeConfig.value.apiKey && claudeConfig.value.apiKey !== claudeConfigOriginalApiKey.value)
 const claudeConfigProxyKeyChanged = computed(() => claudeConfig.value.proxyKey && claudeConfig.value.proxyKey !== claudeConfigOriginalProxyKey.value)
 
+// OpenRouter 配置
+const openrouterConfig = ref({ apiKey: '', model: 'google/gemini-2.5-flash' })
+const openrouterSaving = ref(false)
+const openrouterMessage = ref('')
+const openrouterError = ref(false)
+const openrouterHasKey = ref(false)
+const openrouterStatus = ref('') // 'db' | 'env' | ''
+const showOpenrouterKey = ref(false)
+const openrouterOriginalKey = ref('')
+const openrouterKeyChanged = computed(() => openrouterConfig.value.apiKey && openrouterConfig.value.apiKey !== openrouterOriginalKey.value)
+
 const skills = ref([])
 const showCreateForm = ref(false)
 const expandedSkill = ref(null)
@@ -437,7 +508,7 @@ async function handleDelete(name) {
 }
 
 watch(() => props.visible, (v) => {
-  if (v) { fetchClaudeConfig(); fetchSkills(); fetchCommits(); fetchRemoteConfig(); fetchSettings() }
+  if (v) { fetchClaudeConfig(); fetchOpenrouterConfig(); fetchSkills(); fetchCommits(); fetchRemoteConfig(); fetchSettings() }
 })
 
 // Claude Code 配置
@@ -511,6 +582,68 @@ async function clearClaudeConfig() {
       claudeConfigError.value = false
       setTimeout(() => { claudeConfigMessage.value = '' }, 2000)
     }
+  } catch {}
+}
+
+// OpenRouter 配置方法
+async function fetchOpenrouterConfig() {
+  try {
+    const r = await fetch(`${API}/api/settings/openrouter-config`)
+    const d = await r.json()
+    if (d.success && d.data) {
+      openrouterConfig.value.apiKey = d.data.apiKey || ''
+      openrouterConfig.value.model = d.data.model || 'google/gemini-2.5-flash'
+      openrouterHasKey.value = d.data.hasApiKey || false
+      openrouterStatus.value = d.data.source || ''
+      openrouterOriginalKey.value = d.data.apiKey || ''
+    } else {
+      openrouterConfig.value = { apiKey: '', model: 'google/gemini-2.5-flash' }
+      openrouterHasKey.value = false
+      openrouterStatus.value = ''
+    }
+  } catch {}
+}
+
+async function saveOpenrouterConfig() {
+  openrouterSaving.value = true
+  openrouterMessage.value = ''
+  openrouterError.value = false
+  try {
+    const body = { model: openrouterConfig.value.model || 'google/gemini-2.5-flash' }
+    if (openrouterKeyChanged.value) body.apiKey = openrouterConfig.value.apiKey
+    const r = await fetch(`${API}/api/settings/openrouter-config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    const d = await r.json()
+    if (d.success) {
+      openrouterMessage.value = '配置已保存'
+      fetchOpenrouterConfig()
+    } else {
+      openrouterMessage.value = `保存失败: ${d.error}`
+      openrouterError.value = true
+    }
+  } catch (e) {
+    openrouterMessage.value = `保存失败: ${e.message}`
+    openrouterError.value = true
+  } finally {
+    openrouterSaving.value = false
+    setTimeout(() => { openrouterMessage.value = '' }, 3000)
+  }
+}
+
+async function clearOpenrouterConfig() {
+  if (!confirm('确定清除 OpenRouter 配置？清除后将回退到环境变量 OPENROUTER_API_KEY。')) return
+  try {
+    await fetch(`${API}/api/settings/openrouter-config`, { method: 'DELETE' })
+    openrouterConfig.value = { apiKey: '', model: 'google/gemini-2.5-flash' }
+    openrouterHasKey.value = false
+    openrouterStatus.value = ''
+    openrouterMessage.value = '配置已清除'
+    openrouterError.value = false
+    setTimeout(() => { openrouterMessage.value = '' }, 2000)
+    fetchOpenrouterConfig()
   } catch {}
 }
 
