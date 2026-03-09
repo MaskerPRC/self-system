@@ -251,6 +251,9 @@ ${appList}
 【项目结构说明】
 当前工作目录下有两个子目录：
 - app/frontend/ : Vue 3 前端应用（端口 5174），承载多个交互页面
+  - 已安装 Tailwind CSS 4（通过 @tailwindcss/vite 插件集成，CSS 入口 src/style.css 已配置 @import "tailwindcss"）
+  - 直接在 Vue 模板中使用 Tailwind 4 的 class 即可，无需额外配置
+  - Tailwind 4 不需要 tailwind.config.js，自定义主题用 CSS 变量（@theme 指令）
 - app/server/   : Node.js + Express 后端（端口 3001），为交互页面提供 API
 - .claude/skills/ : Skills 目录，存放已安装的技能配置
 ${skillsSection}${historySection}${attachmentsSection}${targetAppsSection}

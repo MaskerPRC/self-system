@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // 控制后端地址：Docker 环境通过网络名称访问，本地开发用 localhost
@@ -8,6 +9,7 @@ const controlBackend = process.env.CONTROL_BACKEND_URL || 'http://localhost:3000
 export default defineConfig({
   plugins: [
     vue(),
+    tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
