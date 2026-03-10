@@ -31,9 +31,12 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       # 应用容器名称（供 process.js 使用）
-      - APP_CONTAINER_NAME=digital-avatar-app
+      - APP_CONTAINER_NAME=digital-avatar-app-dev
+      - APP_PROD_CONTAINER_NAME=digital-avatar-app-prod
       # 应用前端外部访问地址（供控制面板 iframe/链接使用）
       - APP_EXTERNAL_URL=${APP_EXTERNAL_URL:-http://localhost:${APP_FRONTEND_PORT:-53781}}
+      # 应用生产环境外部访问地址
+      - APP_PROD_EXTERNAL_URL=${APP_PROD_EXTERNAL_URL:-http://localhost:${APP_PROD_PORT:-53780}}
       # Git 自动提交配置
       - GIT_USER_NAME=${GIT_USER_NAME:-Digital Avatar Bot}
       - GIT_USER_EMAIL=${GIT_USER_EMAIL:-bot@digital-avatar.local}
@@ -48,13 +51,13 @@ services:
     networks:
       - app-network
 
-  # ==================== 应用容器 ====================
-  # 应用前端 + 应用后端（由控制容器通过 Docker CLI 管理）
-  app:
+  # ==================== 应用容器（开发） ====================
+  # 开发模式：node --watch + Vite HMR，代码修改即时生效
+  app-dev:
     build:
       context: .
       dockerfile: app/Dockerfile
-    container_name: digital-avatar-app
+    container_name: digital-avatar-app-dev
     ports:
       - "${APP_BACKEND_PORT:-53783}:3001"   # 应用后端
       - "${APP_FRONTEND_PORT:-53781}:5174"   # 应用前端
@@ -63,6 +66,29 @@ services:
       - app-data:/app
     environment:
       # Vite proxy 通过 Docker 网络访问控制后端
+      - CONTROL_BACKEND_URL=http://control:3000
+      # 登录鉴权（与控制端共享凭据）
+      - AUTH_USERNAME=${AUTH_USERNAME}
+      - AUTH_PASSWORD=${AUTH_PASSWORD}
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ==================== 应用容器（生产） ====================
+  # 生产模式：构建前端静态文件，单端口服务，不受开发调试影响
+  app-prod:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: digital-avatar-app-prod
+    entrypoint: ["/entrypoint-prod.sh"]
+    ports:
+      - "${APP_PROD_PORT:-53780}:3001"   # 应用后端（含静态前端）
+    volumes:
+      # 共享应用代码 volume（启动时构建，不会热更新）
+      - app-data:/app
+    environment:
+      - NODE_ENV=production
       - CONTROL_BACKEND_URL=http://control:3000
       # 登录鉴权（与控制端共享凭据）
       - AUTH_USERNAME=${AUTH_USERNAME}

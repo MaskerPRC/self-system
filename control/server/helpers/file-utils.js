@@ -194,7 +194,7 @@ export async function verifyAppAfterChange(conversationId, requestId, { broadcas
       const { exec } = await import('child_process');
       await new Promise((resolve) => {
         exec(
-          `docker exec ${process.env.APP_CONTAINER_NAME || 'digital-avatar-app'} sh -c 'cd /app/server && pnpm install --silent 2>/dev/null; cd /app/frontend && pnpm install --silent 2>/dev/null'`,
+          `docker exec ${process.env.APP_CONTAINER_NAME || 'digital-avatar-app-dev'} sh -c 'cd /app/server && pnpm install --silent 2>/dev/null; cd /app/frontend && pnpm install --silent 2>/dev/null'`,
           { timeout: 60000 },
           () => resolve()
         );

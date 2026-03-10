@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const router = express.Router();
 
-const APP_CONTAINER = process.env.APP_CONTAINER_NAME || 'digital-avatar-app';
+const APP_CONTAINER = process.env.APP_CONTAINER_NAME || 'digital-avatar-app-dev';
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 function dockerExecCmd(command, maxBuffer = 2 * 1024 * 1024) {

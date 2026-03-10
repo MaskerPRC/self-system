@@ -5,7 +5,8 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // 容器名称
-const APP_CONTAINER = process.env.APP_CONTAINER_NAME || 'digital-avatar-app';
+const APP_CONTAINER = process.env.APP_CONTAINER_NAME || 'digital-avatar-app-dev';
+const APP_PROD_CONTAINER = process.env.APP_PROD_CONTAINER_NAME || 'digital-avatar-app-prod';
 const CONTROL_CONTAINER = 'digital-avatar-control';
 
 // 日志过滤标记
@@ -168,6 +169,100 @@ export async function getAppStatus() {
       server: { running: false, port: 3001 },
       isStarting,
       isStopping
+    };
+  }
+}
+
+// ==================== 生产容器管理 ====================
+
+let isProdStarting = false;
+let isProdStopping = false;
+
+/**
+ * 启动生产容器
+ */
+export async function startAppProd() {
+  if (isProdStarting) return { success: false, message: '正在启动中' };
+  if (isProdStopping) return { success: false, message: '正在停止中' };
+
+  isProdStarting = true;
+  try {
+    console.log(`[Process] 启动生产容器: ${APP_PROD_CONTAINER}`);
+    await dockerExec(`docker start ${APP_PROD_CONTAINER}`);
+    await new Promise(r => setTimeout(r, 5000));
+    return { success: true };
+  } catch (error) {
+    throw new Error(`启动生产容器失败: ${error.message}`);
+  } finally {
+    isProdStarting = false;
+  }
+}
+
+/**
+ * 停止生产容器
+ */
+export async function stopAppProd() {
+  if (isProdStopping) return { success: false, message: '正在停止中' };
+  isProdStopping = true;
+  try {
+    console.log(`[Process] 停止生产容器: ${APP_PROD_CONTAINER}`);
+    await dockerExec(`docker stop ${APP_PROD_CONTAINER}`);
+    return { success: true };
+  } catch (error) {
+    throw new Error(`停止生产容器失败: ${error.message}`);
+  } finally {
+    isProdStopping = false;
+  }
+}
+
+/**
+ * 重启生产容器（重新构建前端并启动）
+ */
+export async function restartAppProd() {
+  console.log(`[Process] 重启生产容器: ${APP_PROD_CONTAINER}`);
+  try {
+    await dockerExec(`docker restart ${APP_PROD_CONTAINER}`);
+    await new Promise(r => setTimeout(r, 5000));
+    return { success: true };
+  } catch (error) {
+    throw new Error(`重启生产容器失败: ${error.message}`);
+  }
+}
+
+/**
+ * 获取生产容器日志
+ */
+export async function getAppProdLogs(tail = 200) {
+  try {
+    const logs = await dockerExec(`docker logs --tail ${tail} ${APP_PROD_CONTAINER} 2>&1`);
+    return filterFromLastRestart(logs, '应用容器（生产模式）');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * 获取生产容器状态
+ */
+export async function getAppProdStatus() {
+  try {
+    const running = await dockerExec(
+      `docker inspect --format '{{.State.Running}}' ${APP_PROD_CONTAINER}`
+    );
+    const isRunning = running.replace(/'/g, '') === 'true';
+
+    return {
+      running: isRunning,
+      port: 3001,
+      isStarting: isProdStarting,
+      isStopping: isProdStopping
+    };
+  } catch {
+    return {
+      running: false,
+      port: 3001,
+      isStarting: isProdStarting,
+      isStopping: isProdStopping
     };
   }
 }

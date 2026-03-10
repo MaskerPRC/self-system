@@ -1,5 +1,5 @@
 import express from 'express';
-import { startAppProject, stopAppProject, restartAppProject, getAppStatus, getAppLogs, getControlLogs } from '../modules/process.js';
+import { startAppProject, stopAppProject, restartAppProject, getAppStatus, getAppLogs, getControlLogs, startAppProd, stopAppProd, restartAppProd, getAppProdStatus, getAppProdLogs } from '../modules/process.js';
 import { broadcast } from '../modules/websocket.js';
 
 const router = express.Router();
@@ -61,6 +61,59 @@ router.get('/api/control/logs', async (req, res) => {
   try {
     const tail = Math.min(parseInt(req.query.tail) || 200, 500);
     const logs = await getControlLogs(tail);
+    res.json({ success: true, data: logs });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== 生产容器管理 API ====================
+
+router.get('/api/app-prod/status', async (req, res) => {
+  try {
+    res.json({ success: true, data: await getAppProdStatus() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/api/app-prod/start', async (req, res) => {
+  try {
+    broadcast({ type: 'status', message: '正在启动生产容器...' });
+    const result = await startAppProd();
+    broadcast({ type: 'status', message: '生产容器已启动', appProdStatus: 'running' });
+    res.json(result);
+  } catch (error) {
+    broadcast({ type: 'error', message: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/api/app-prod/stop', async (req, res) => {
+  try {
+    const result = await stopAppProd();
+    broadcast({ type: 'status', message: '生产容器已停止', appProdStatus: 'stopped' });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/api/app-prod/restart', async (req, res) => {
+  try {
+    broadcast({ type: 'status', message: '正在重启生产容器（重新构建）...' });
+    const result = await restartAppProd();
+    broadcast({ type: 'status', message: '生产容器已重启', appProdStatus: 'running' });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/api/app-prod/logs', async (req, res) => {
+  try {
+    const tail = Math.min(parseInt(req.query.tail) || 200, 500);
+    const logs = await getAppProdLogs(tail);
     res.json({ success: true, data: logs });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

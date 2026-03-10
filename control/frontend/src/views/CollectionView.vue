@@ -7,22 +7,42 @@
         <p class="text-ink-500 mt-2 font-medium">所有的分身与页面，皆陈列于此。</p>
       </div>
 
-      <!-- Status Pill -->
-      <div class="flex items-center gap-1.5 bg-paper px-2 py-1.5 rounded-full border border-stone-200 shadow-subtle">
-        <div class="flex items-center gap-2 px-3 py-1 bg-surface rounded-full">
-          <div class="w-2 h-2 rounded-full" :class="statusDotClass"></div>
-          <span class="text-xs font-medium text-ink-800">{{ statusLabel }}</span>
+      <!-- Status Pills -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- Dev Status -->
+        <div class="flex items-center gap-1.5 bg-paper px-2 py-1.5 rounded-full border border-stone-200 shadow-subtle">
+          <div class="flex items-center gap-2 px-3 py-1 bg-surface rounded-full">
+            <div class="w-2 h-2 rounded-full" :class="statusDotClass"></div>
+            <span class="text-xs font-medium text-ink-800">DEV {{ statusLabel }}</span>
+          </div>
+          <div class="flex gap-0.5 px-1">
+            <button @click="doAction('start')" class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors" title="启动开发">
+              <i class="ph-fill ph-play text-sm"></i>
+            </button>
+            <button @click="doAction('stop')" class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="停止开发">
+              <i class="ph-fill ph-stop text-sm"></i>
+            </button>
+            <button @click="doAction('restart')" class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors" title="重启开发">
+              <i class="ph-bold ph-arrows-clockwise text-sm"></i>
+            </button>
+          </div>
         </div>
-        <div class="flex gap-0.5 px-1">
-          <button @click="doAction('start')" class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors" title="启动">
-            <i class="ph-fill ph-play text-sm"></i>
-          </button>
-          <button @click="doAction('stop')" class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="停止">
-            <i class="ph-fill ph-stop text-sm"></i>
-          </button>
-          <button @click="doAction('restart')" class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors" title="重启">
-            <i class="ph-bold ph-arrows-clockwise text-sm"></i>
-          </button>
+
+        <!-- Prod Status & Publish -->
+        <div class="flex items-center gap-1.5 bg-paper px-2 py-1.5 rounded-full border border-stone-200 shadow-subtle">
+          <div class="flex items-center gap-2 px-3 py-1 bg-surface rounded-full">
+            <div class="w-2 h-2 rounded-full" :class="prodDotClass"></div>
+            <span class="text-xs font-medium text-ink-800">PROD {{ prodLabel }}</span>
+          </div>
+          <div class="flex gap-0.5 px-1">
+            <button @click="publishToProd" class="h-7 flex items-center gap-1.5 px-3 text-xs font-medium rounded-full transition-colors" :class="prodStatus === 'publishing' ? 'text-amber-600 bg-amber-50 cursor-wait' : 'text-brand-600 hover:bg-brand-50'" :disabled="prodStatus === 'publishing'" title="构建并发布到生产环境">
+              <i class="text-sm" :class="prodStatus === 'publishing' ? 'ph ph-circle-notch animate-spin' : 'ph-bold ph-rocket-launch'"></i>
+              <span>{{ prodStatus === 'publishing' ? '发布中...' : '发布' }}</span>
+            </button>
+            <button @click="doProdAction('stop')" class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="停止生产">
+              <i class="ph-fill ph-stop text-sm"></i>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -295,6 +315,7 @@ import PageCard from '../components/PageCard.vue'
 const API = ''
 const pages = ref([])
 const appStatus = ref('stopped')
+const prodStatus = ref('stopped')
 const appBaseUrl = ref('')
 const forceViewMode = ref(null) // null = auto, 'card' | 'compact'
 let timer = null
@@ -314,6 +335,18 @@ const statusDotClass = computed(() => {
 const statusLabel = computed(() => {
   if (appStatus.value === 'running') return '运行中'
   if (appStatus.value === 'restarting') return '重启中...'
+  return '已停止'
+})
+
+const prodDotClass = computed(() => {
+  if (prodStatus.value === 'running') return 'bg-emerald-500'
+  if (prodStatus.value === 'publishing') return 'bg-amber-500 animate-pulse'
+  return 'bg-ink-300'
+})
+
+const prodLabel = computed(() => {
+  if (prodStatus.value === 'running') return '运行中'
+  if (prodStatus.value === 'publishing') return '发布中...'
   return '已停止'
 })
 
@@ -343,10 +376,40 @@ async function fetchStatus() {
   } catch {}
 }
 
+async function fetchProdStatus() {
+  try {
+    const r = await fetch(`${API}/api/app-prod/status`)
+    const d = await r.json()
+    if (d.success) {
+      if (prodStatus.value !== 'publishing') {
+        prodStatus.value = d.data.running ? 'running' : 'stopped'
+      }
+    }
+  } catch {}
+}
+
 async function doAction(action) {
   if (action === 'restart') appStatus.value = 'restarting'
   await fetch(`${API}/api/app/${action}`, { method: 'POST' })
   setTimeout(fetchStatus, 2000)
+}
+
+async function doProdAction(action) {
+  await fetch(`${API}/api/app-prod/${action}`, { method: 'POST' })
+  setTimeout(fetchProdStatus, 2000)
+}
+
+async function publishToProd() {
+  if (prodStatus.value === 'publishing') return
+  if (!confirm('确认发布到生产环境？将重新构建前端并重启生产容器。')) return
+  prodStatus.value = 'publishing'
+  try {
+    await fetch(`${API}/api/app-prod/restart`, { method: 'POST' })
+    // 生产容器需要构建，等久一点再刷新状态
+    setTimeout(fetchProdStatus, 8000)
+  } catch {
+    prodStatus.value = 'stopped'
+  }
 }
 
 function openPage(p) {
@@ -577,8 +640,8 @@ function fileIcon(name) {
 
 onMounted(async () => {
   await fetchConfig()
-  fetchPages(); fetchStatus(); fetchFiles('/app')
-  timer = setInterval(() => { fetchPages(); fetchStatus() }, 10000)
+  fetchPages(); fetchStatus(); fetchProdStatus(); fetchFiles('/app')
+  timer = setInterval(() => { fetchPages(); fetchStatus(); fetchProdStatus() }, 10000)
 })
 onUnmounted(() => { if (timer) clearInterval(timer) })
 </script>

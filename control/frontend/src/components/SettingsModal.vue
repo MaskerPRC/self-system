@@ -259,8 +259,11 @@
                       <p class="text-xs text-ink-500 mt-1 line-clamp-2">{{ skill.description }}</p>
                     </div>
                     <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-3">
-                      <button @click="viewSkill(skill)" class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors" title="查看">
-                        <i class="ph ph-eye text-sm"></i>
+                      <button @click="viewSkill(skill)" class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors" :title="expandedSkill === skill.folder ? '收起' : '查看'">
+                        <i :class="expandedSkill === skill.folder ? 'ph ph-eye-slash' : 'ph ph-eye'" class="text-sm"></i>
+                      </button>
+                      <button @click="startEdit(skill)" class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors" title="编辑">
+                        <i class="ph ph-pencil-simple text-sm"></i>
                       </button>
                       <button @click="handleDelete(skill.folder)" class="w-7 h-7 flex items-center justify-center text-ink-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="删除">
                         <i class="ph ph-trash text-sm"></i>
@@ -268,9 +271,34 @@
                     </div>
                   </div>
 
-                  <!-- Expanded Content -->
-                  <div v-if="expandedSkill === skill.folder" class="mt-3 pt-3 border-t border-stone-200">
+                  <!-- Expanded Content (view mode) -->
+                  <div v-if="expandedSkill === skill.folder && editingSkill !== skill.folder" class="mt-3 pt-3 border-t border-stone-200">
                     <pre class="text-xs text-ink-700 whitespace-pre-wrap font-mono bg-paper p-3 rounded-lg border border-stone-100 max-h-60 overflow-y-auto">{{ skill.content }}</pre>
+                  </div>
+
+                  <!-- Edit Mode -->
+                  <div v-if="editingSkill === skill.folder" class="mt-3 pt-3 border-t border-stone-200">
+                    <div class="space-y-3">
+                      <div>
+                        <label class="text-xs font-medium text-ink-700 mb-1 block">名称</label>
+                        <input v-model="editSkillData.name" class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors" />
+                      </div>
+                      <div>
+                        <label class="text-xs font-medium text-ink-700 mb-1 block">描述</label>
+                        <input v-model="editSkillData.description" class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors" />
+                      </div>
+                      <div>
+                        <label class="text-xs font-medium text-ink-700 mb-1 block">内容</label>
+                        <textarea v-model="editSkillData.content" rows="8" class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 resize-none transition-colors font-mono"></textarea>
+                      </div>
+                      <div class="flex gap-2 justify-end">
+                        <button @click="cancelEdit" class="text-xs px-3 py-1.5 text-ink-500 hover:text-ink-900 transition-colors">取消</button>
+                        <button @click="handleUpdate" :disabled="editSkillSaving || !editSkillData.name || !editSkillData.description"
+                          class="text-xs font-medium px-4 py-1.5 bg-brand-500 text-white rounded-full hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                          {{ editSkillSaving ? '保存中...' : '保存' }}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -450,6 +478,9 @@ const skills = ref([])
 const showCreateForm = ref(false)
 const expandedSkill = ref(null)
 const newSkill = ref({ name: '', description: '', content: '' })
+const editingSkill = ref(null)
+const editSkillData = ref({ name: '', description: '', content: '' })
+const editSkillSaving = ref(false)
 
 // 折叠状态（默认收起）
 const skillsExpanded = ref(false)
@@ -505,6 +536,36 @@ async function handleDelete(name) {
     await fetch(`${API}/api/skills/${name}`, { method: 'DELETE' })
     fetchSkills()
   } catch {}
+}
+
+function startEdit(skill) {
+  editingSkill.value = skill.folder
+  editSkillData.value = { name: skill.name, description: skill.description, content: skill.content || '' }
+  expandedSkill.value = null
+}
+
+function cancelEdit() {
+  editingSkill.value = null
+  editSkillData.value = { name: '', description: '', content: '' }
+}
+
+async function handleUpdate() {
+  if (!editingSkill.value || !editSkillData.value.name || !editSkillData.value.description) return
+  editSkillSaving.value = true
+  try {
+    const r = await fetch(`${API}/api/skills/${editingSkill.value}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editSkillData.value)
+    })
+    const d = await r.json()
+    if (d.success) {
+      editingSkill.value = null
+      editSkillData.value = { name: '', description: '', content: '' }
+      fetchSkills()
+    }
+  } catch {}
+  editSkillSaving.value = false
 }
 
 watch(() => props.visible, (v) => {

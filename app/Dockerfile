@@ -28,7 +28,9 @@ COPY app/frontend/ /opt/app-init/frontend/
 
 # 启动脚本（放在 volume 挂载路径之外）
 COPY app/docker/entrypoint.sh /entrypoint.sh
-RUN dos2unix /entrypoint.sh && chmod +x /entrypoint.sh
+COPY app/docker/entrypoint-prod.sh /entrypoint-prod.sh
+RUN dos2unix /entrypoint.sh && chmod +x /entrypoint.sh && \
+    dos2unix /entrypoint-prod.sh && chmod +x /entrypoint-prod.sh
 
 WORKDIR /app
 
