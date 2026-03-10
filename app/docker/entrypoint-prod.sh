@@ -23,6 +23,9 @@ echo "[启动] 安装应用项目依赖..."
 cd /app/server && pnpm install --silent 2>/dev/null
 cd /app/frontend && pnpm install --silent 2>/dev/null
 
+# 确保 PWA 构建依赖存在
+cd /app/frontend && pnpm add workbox-window --silent 2>/dev/null
+
 # ---- 构建前端静态文件 ----
 echo "[构建] 构建前端生产版本..."
 cd /app/frontend && npx vite build
@@ -30,13 +33,18 @@ BUILD_EXIT=$?
 
 if [ $BUILD_EXIT -ne 0 ]; then
     echo "[错误] 前端构建失败，退出码: $BUILD_EXIT"
-    echo "[回退] 将以开发模式启动前端..."
+    echo "[回退] 将以开发模式启动..."
 fi
 
-# ---- 启动应用后端（生产模式，不使用 --watch） ----
-echo "[启动] 应用后端 - 生产模式 (Port 3001)..."
+# ---- 启动应用后端 ----
 cd /app/server
-NODE_ENV=production node index.js &
+if [ $BUILD_EXIT -eq 0 ]; then
+    echo "[启动] 应用后端 - 生产模式 (Port 3001)..."
+    NODE_ENV=production node index.js &
+else
+    echo "[启动] 应用后端 - 开发模式 (Port 3001)..."
+    NODE_ENV=development node index.js &
+fi
 APP_SERVER_PID=$!
 
 # 如果前端构建失败，回退到 Vite 开发模式

@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { authMiddleware, createSession, destroySession, isAuthEnabled, validateSession, COOKIE_NAME, SESSION_MAX_AGE, startPublicRoutesSync, getPublicRoutes } from './auth.js';
 
@@ -75,11 +76,17 @@ app.get('/api/app/health', (req, res) => {
 // ==================== 生产模式：静态文件服务 ====================
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../frontend/dist');
-  app.use(express.static(distPath));
-  // SPA 回退：非 API 路由返回 index.html
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
+  const indexPath = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    app.use(express.static(distPath));
+    // SPA 回退：非 API 路由返回 index.html
+    app.get('*', (req, res) => {
+      res.sendFile(indexPath);
+    });
+    console.log('[App Server] 生产模式：静态文件服务已启用');
+  } else {
+    console.warn('[App Server] 生产模式：dist 目录不存在，跳过静态文件服务');
+  }
 }
 
 app.listen(PORT, '0.0.0.0', () => {
