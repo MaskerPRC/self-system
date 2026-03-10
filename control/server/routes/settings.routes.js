@@ -54,17 +54,22 @@ async function migrateFromJsonIfNeeded() {
 
 async function readSettings() {
   const result = { ...DEFAULT_SETTINGS };
+  const applyRows = (rows) => {
+    rows.forEach(row => {
+      try { result[row.key] = JSON.parse(row.value); } catch { result[row.key] = row.value; }
+    });
+  };
   try {
     if (supabase) {
-      const { data } = await supabase.from('settings').select('key, value');
-      if (data) data.forEach(row => {
-        try { result[row.key] = JSON.parse(row.value); } catch { result[row.key] = row.value; }
-      });
+      const { data, error } = await supabase.from('settings').select('key, value');
+      if (error) {
+        console.error('[Settings] Supabase 读取失败，降级到 SQLite:', error.message);
+        applyRows(sqliteDb.prepare('SELECT key, value FROM settings').all());
+      } else if (data) {
+        applyRows(data);
+      }
     } else {
-      const rows = sqliteDb.prepare('SELECT key, value FROM settings').all();
-      rows.forEach(row => {
-        try { result[row.key] = JSON.parse(row.value); } catch { result[row.key] = row.value; }
-      });
+      applyRows(sqliteDb.prepare('SELECT key, value FROM settings').all());
     }
   } catch (e) {
     console.error('[Settings] 读取失败:', e.message);
@@ -80,7 +85,10 @@ async function writeSetting(key, value) {
   ).run(key, strValue);
   // 如果配置了 Supabase，同时写入远程
   if (supabase) {
-    await supabase.from('settings').upsert({ key, value: strValue, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    const { error } = await supabase.from('settings').upsert({ key, value: strValue, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if (error) {
+      console.error(`[Settings] Supabase 写入失败 (key=${key}):`, error.message);
+    }
   }
 }
 
