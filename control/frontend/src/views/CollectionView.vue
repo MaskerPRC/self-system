@@ -405,8 +405,9 @@ async function publishToProd() {
   prodStatus.value = 'publishing'
   try {
     await fetch(`${API}/api/app-prod/restart`, { method: 'POST' })
-    // 生产容器需要构建，等久一点再刷新状态
-    setTimeout(fetchProdStatus, 8000)
+    // API 返回说明 docker restart 已完成，直接刷新状态
+    prodStatus.value = 'stopped'
+    fetchProdStatus()
   } catch {
     prodStatus.value = 'stopped'
   }
