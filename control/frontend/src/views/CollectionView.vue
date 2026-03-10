@@ -381,9 +381,7 @@ async function fetchProdStatus() {
     const r = await fetch(`${API}/api/app-prod/status`)
     const d = await r.json()
     if (d.success) {
-      if (prodStatus.value !== 'publishing') {
-        prodStatus.value = d.data.running ? 'running' : 'stopped'
-      }
+      prodStatus.value = d.data.running ? 'running' : 'stopped'
     }
   } catch {}
 }
