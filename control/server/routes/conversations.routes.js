@@ -316,7 +316,13 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
           }
         }
 
-        // 3.5 Git 自动提交代码变更
+        // 3.5 页面变更后重启应用并验证
+        if (pageInfos) {
+          broadcast({ type: 'processing', conversationId, requestId, message: '正在重启应用并验证...' });
+          await verifyAppAfterChange(conversationId, requestId, { broadcast, restartAppProject, getAppStatus, getAppLogs, verifyAndFixApp });
+        }
+
+        // 3.6 Git 自动提交代码变更
         if (pageInfos || skillInfos) {
           try {
             const gitResult = await commitChanges(`feat: ${content.trim().slice(0, 150)}`);
