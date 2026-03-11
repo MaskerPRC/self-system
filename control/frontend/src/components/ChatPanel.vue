@@ -43,9 +43,20 @@
         <!-- User message -->
         <div v-else-if="m.role === 'user'" class="flex justify-end animate-fade-in-up">
           <div class="max-w-[85%] sm:max-w-[70%] bg-surface border border-stone-200 text-ink-900 px-6 py-4 rounded-3xl rounded-tr-md shadow-sm">
+            <!-- @ 提及的 apps 和 skills -->
+            <div v-if="getMentions(m.attachments).length" class="flex flex-wrap gap-1.5 mb-2">
+              <span v-for="mention in getMentions(m.attachments)" :key="mention.type + '-' + (mention.id || mention.name)"
+                class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium border"
+                :class="mention.type === 'mention_skill'
+                  ? 'bg-amber-50 text-amber-600 border-amber-100'
+                  : 'bg-brand-50 text-brand-600 border-brand-100'">
+                <i :class="mention.type === 'mention_skill' ? 'ph ph-lightning' : 'ph ph-browser'" class="text-xs"></i>
+                {{ mention.type === 'mention_skill' ? mention.name : mention.title }}
+              </span>
+            </div>
             <!-- Attachments -->
-            <div v-if="m.attachments && m.attachments.length" class="flex flex-wrap gap-2 mb-2">
-              <a v-for="(att, i) in m.attachments" :key="i"
+            <div v-if="getFileAttachments(m.attachments).length" class="flex flex-wrap gap-2 mb-2">
+              <a v-for="(att, i) in getFileAttachments(m.attachments)" :key="i"
                 :href="downloadUrl(att)" :download="att.name"
                 class="flex items-center gap-1.5 bg-stone-100 hover:bg-stone-200 rounded-lg px-2.5 py-1.5 text-xs text-ink-600 transition-colors cursor-pointer">
                 <i :class="attIcon(att)" class="text-sm"></i>
@@ -408,7 +419,12 @@ const filteredMentionItems = computed(() => {
 
 function getFileAttachments(attachments) {
   if (!attachments) return []
-  return attachments.filter(a => a.type !== 'page_created' && a.type !== 'skill_created')
+  return attachments.filter(a => a.type !== 'page_created' && a.type !== 'skill_created' && a.type !== 'mention_app' && a.type !== 'mention_skill')
+}
+
+function getMentions(attachments) {
+  if (!attachments) return []
+  return attachments.filter(a => a.type === 'mention_app' || a.type === 'mention_skill')
 }
 
 function openFileDrawer(msgId) {

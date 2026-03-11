@@ -119,7 +119,15 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
     // 保存用户消息
     const msgContent = content ? content.trim() : '';
     const insertData = { conversation_id: conversationId, role: 'user', content: msgContent };
-    if (hasAttachments) insertData.attachments = attachments;
+    // 合并文件附件和 @ 提及信息到 attachments
+    const userAttachments = hasAttachments ? [...attachments] : [];
+    if (targetApps && targetApps.length > 0) {
+      targetApps.forEach(a => userAttachments.push({ type: 'mention_app', id: a.id, title: a.title, route_path: a.route_path }));
+    }
+    if (targetSkills && targetSkills.length > 0) {
+      targetSkills.forEach(s => userAttachments.push({ type: 'mention_skill', name: s.name, description: s.description }));
+    }
+    if (userAttachments.length > 0) insertData.attachments = userAttachments;
     const { data: userMsg, error: userError } = await supabase
       .from('messages')
       .insert(insertData)

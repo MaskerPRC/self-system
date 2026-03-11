@@ -250,11 +250,18 @@ async function sendMessage(payload) {
     }
   }
 
-  // 本地乐观消息
+  // 本地乐观消息（包含 @ 提及信息）
+  const localAttachments = uploadedAttachments.length > 0 ? [...uploadedAttachments] : []
+  if (targetApps && targetApps.length > 0) {
+    targetApps.forEach(a => localAttachments.push({ type: 'mention_app', id: a.id, title: a.title, route_path: a.route_path }))
+  }
+  if (targetSkills && targetSkills.length > 0) {
+    targetSkills.forEach(s => localAttachments.push({ type: 'mention_skill', name: s.name, description: s.description }))
+  }
   messages.value.push({
     id: 'tmp-' + Date.now(), conversation_id: activeId.value,
     role: 'user', content: content?.trim() || '',
-    attachments: uploadedAttachments.length > 0 ? uploadedAttachments : null,
+    attachments: localAttachments.length > 0 ? localAttachments : null,
     created_at: new Date().toISOString()
   })
 
