@@ -108,4 +108,7 @@ EXPOSE 3000
 COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
+# 在构建阶段将 /app 所有权交给 claude 用户，避免 entrypoint 中 chown -R 导致启动缓慢
+RUN chown -R claude:claude /app
+
 ENTRYPOINT ["/app/entrypoint.sh"]

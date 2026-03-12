@@ -156,7 +156,11 @@ if [ -f /root/.claude.json ]; then
     cp /root/.claude.json /home/claude/.claude.json
     chown claude:claude /home/claude/.claude.json
 fi
-chown -R claude:claude /app
+# 只修改顶层文件和关键子目录的权限，避免递归整个 /app（含 node_modules）导致启动缓慢
+chown claude:claude /app
+chown -R claude:claude /app/control/server 2>/dev/null || true
+chown -R claude:claude /app/app/server 2>/dev/null || true
+chown -R claude:claude /app/app/frontend/src 2>/dev/null || true
 
 # 验证 Claude Code
 echo "[检查] 验证 Claude Code..."
