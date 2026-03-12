@@ -4,13 +4,23 @@ const sessions = new Map();
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
 const COOKIE_NAME = 'self_session';
 
+function getAuthCredentials() {
+  const isProd = process.env.NODE_ENV === 'production';
+  const prefix = isProd ? 'PROD' : 'DEV';
+  const username = process.env[`${prefix}_AUTH_USERNAME`] || process.env.AUTH_USERNAME;
+  const password = process.env[`${prefix}_AUTH_PASSWORD`] || process.env.AUTH_PASSWORD;
+  return { username, password };
+}
+
 export function isAuthEnabled() {
-  return !!(process.env.AUTH_USERNAME && process.env.AUTH_PASSWORD);
+  const { username, password } = getAuthCredentials();
+  return !!(username && password);
 }
 
 export function createSession(username, password) {
   if (!isAuthEnabled()) return { success: false, error: '鉴权未启用' };
-  if (username !== process.env.AUTH_USERNAME || password !== process.env.AUTH_PASSWORD) {
+  const creds = getAuthCredentials();
+  if (username !== creds.username || password !== creds.password) {
     return { success: false, error: '用户名或密码错误' };
   }
 

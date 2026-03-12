@@ -8,13 +8,23 @@ const COOKIE_NAME = 'self_app_session';
 let publicRoutes = new Set();
 const CONTROL_BACKEND = process.env.CONTROL_BACKEND_URL || 'http://localhost:3000';
 
+function getAuthCredentials() {
+  const isProd = process.env.NODE_ENV === 'production';
+  const prefix = isProd ? 'PROD' : 'DEV';
+  const username = process.env[`${prefix}_AUTH_USERNAME`] || process.env.AUTH_USERNAME;
+  const password = process.env[`${prefix}_AUTH_PASSWORD`] || process.env.AUTH_PASSWORD;
+  return { username, password };
+}
+
 export function isAuthEnabled() {
-  return !!(process.env.AUTH_USERNAME && process.env.AUTH_PASSWORD);
+  const { username, password } = getAuthCredentials();
+  return !!(username && password);
 }
 
 export function createSession(username, password) {
   if (!isAuthEnabled()) return null;
-  if (username !== process.env.AUTH_USERNAME || password !== process.env.AUTH_PASSWORD) return null;
+  const creds = getAuthCredentials();
+  if (username !== creds.username || password !== creds.password) return null;
 
   const token = crypto.randomBytes(32).toString('hex');
   sessions.set(token, { expiresAt: Date.now() + SESSION_MAX_AGE });
