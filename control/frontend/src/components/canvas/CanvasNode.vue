@@ -23,6 +23,7 @@
       :isDragging="isDraggingAny"
       :width="node.width"
       :height="node.height"
+      :appBaseUrl="appBaseUrl"
     />
     <RequestNode
       v-else-if="node.type === 'request'"
@@ -50,10 +51,11 @@ const props = defineProps({
   node: { type: Object, required: true },
   selected: { type: Boolean, default: false },
   zoom: { type: Number, default: 1 },
-  isDraggingAny: { type: Boolean, default: false }
+  isDraggingAny: { type: Boolean, default: false },
+  appBaseUrl: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update-content', 'resize'])
+const emit = defineEmits(['update-content', 'resize', 'resize-start', 'resize-end'])
 
 const nodeStyle = computed(() => ({
   left: `${props.node.x}px`,
@@ -69,6 +71,8 @@ function startResize(e) {
   const startW = props.node.width
   const startH = props.node.height || 80
 
+  emit('resize-start')
+
   function onMove(e) {
     const dx = (e.clientX - startX) / props.zoom
     const dy = (e.clientY - startY) / props.zoom
@@ -78,6 +82,7 @@ function startResize(e) {
   }
 
   function onUp() {
+    emit('resize-end')
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
   }

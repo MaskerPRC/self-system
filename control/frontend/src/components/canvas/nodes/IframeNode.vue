@@ -40,15 +40,15 @@ const props = defineProps({
   content: { type: Object, default: () => ({ route: '/', title: '' }) },
   isDragging: { type: Boolean, default: false },
   width: { type: Number, default: 480 },
-  height: { type: Number, default: 360 }
+  height: { type: Number, default: 360 },
+  appBaseUrl: { type: String, default: '' }
 })
 
 const iframeRef = ref(null)
 
 const appUrl = computed(() => {
   const route = props.content?.route || '/'
-  // In dev mode use port 5174, in production use relative path
-  const base = import.meta.env.DEV ? 'http://localhost:5174' : ''
+  const base = props.appBaseUrl || `http://${location.hostname}:5174`
   return base + route
 })
 

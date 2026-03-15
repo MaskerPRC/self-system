@@ -4,6 +4,7 @@
       :projects="projects"
       :activeProject="activeProject"
       :zoom="zoom"
+      :pages="pages"
       @select-project="selectProject"
       @create-project="createProject"
       @rename-project="renameProject"
@@ -20,6 +21,7 @@
         :nodes="nodes"
         :zoom="zoom"
         :offset="offset"
+        :appBaseUrl="appBaseUrl"
         @update:zoom="zoom = $event"
         @update:offset="offset = $event"
         @update-node="handleUpdateNode"
@@ -30,14 +32,15 @@
         @request-ai="showRequestPanel = true"
         @upload-files="handleUploadFiles"
       />
+      <RequestPanel
+        v-if="showRequestPanel"
+        :selectedNodes="selectedNodes"
+        :loading="requestLoading"
+        :anchorRect="selectionScreenRect"
+        @submit="handleAiRequest"
+        @close="showRequestPanel = false"
+      />
     </div>
-    <RequestPanel
-      v-if="showRequestPanel"
-      :selectedNodes="selectedNodes"
-      :loading="requestLoading"
-      @submit="handleAiRequest"
-      @close="showRequestPanel = false"
-    />
   </div>
 </template>
 
@@ -59,9 +62,28 @@ const canvasRef = ref(null)
 const showRequestPanel = ref(false)
 const requestLoading = ref(false)
 const selectedNodeIds = ref([])
+const pages = ref([])
+const appBaseUrl = ref(`http://${location.hostname}:5174`)
 
 const selectedNodes = computed(() => {
   return nodes.value.filter(n => selectedNodeIds.value.includes(n.id))
+})
+
+const selectionScreenRect = computed(() => {
+  const sel = selectedNodes.value
+  if (sel.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const n of sel) {
+    const sx = n.x * zoom.value + offset.value.x
+    const sy = n.y * zoom.value + offset.value.y
+    const sw = n.width * zoom.value
+    const sh = (n.height || 60) * zoom.value
+    if (sx < minX) minX = sx
+    if (sy < minY) minY = sy
+    if (sx + sw > maxX) maxX = sx + sw
+    if (sy + sh > maxY) maxY = sy + sh
+  }
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
 })
 
 async function fetchProjects() {
@@ -81,6 +103,24 @@ async function fetchProjects() {
   } catch (e) {
     console.error('Failed to fetch projects:', e)
   }
+}
+
+async function fetchPages() {
+  try {
+    const r = await fetch(`${API}/api/pages`)
+    const d = await r.json()
+    if (d.success) pages.value = d.data || []
+  } catch (e) {
+    console.error('Failed to fetch pages:', e)
+  }
+}
+
+async function fetchAppConfig() {
+  try {
+    const r = await fetch(`${API}/api/config`)
+    const d = await r.json()
+    if (d.appExternalUrl) appBaseUrl.value = d.appExternalUrl
+  } catch {}
 }
 
 async function fetchNodes(projectId) {
@@ -176,9 +216,9 @@ function addTextNode() {
   })
 }
 
-function addIframeNode() {
-  const route = prompt('输入应用路由路径（如 /）：')
-  if (!route) return
+function addIframeNode(pageInfo) {
+  const route = pageInfo?.route || '/'
+  const title = pageInfo?.title || route
   const center = getViewportCenter()
   handleCreateNode({
     type: 'iframe',
@@ -186,7 +226,7 @@ function addIframeNode() {
     y: center.y - 180,
     width: 480,
     height: 360,
-    content: { route, title: route }
+    content: { route, title }
   })
 }
 
@@ -385,6 +425,8 @@ function connectWs() {
 onMounted(() => {
   document.title = '无限画布'
   fetchProjects()
+  fetchPages()
+  fetchAppConfig()
   connectWs()
 })
 

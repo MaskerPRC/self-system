@@ -21,18 +21,24 @@
         :node="node"
         :selected="selectedIds.has(node.id)"
         :zoom="zoom"
-        :isDraggingAny="isDragging"
+        :isDraggingAny="isDragging || isResizing"
+        :appBaseUrl="appBaseUrl"
         @mousedown.stop="onNodeMouseDown($event, node)"
         @update-content="(content) => $emit('update-node', { id: node.id, content })"
         @resize="(size) => $emit('update-node', { id: node.id, ...size })"
+        @resize-start="isResizing = true"
+        @resize-end="isResizing = false"
       />
     </div>
 
     <!-- Selection box overlay -->
     <SelectionBox v-if="isSelecting" :rect="selectionRect" />
 
+    <!-- Interaction overlay: captures mouse during drag/resize to prevent iframe/node interference -->
+    <div v-if="isDragging || isResizing" class="absolute inset-0 z-10 cursor-se-resize" :class="{ 'cursor-move': isDragging }"></div>
+
     <!-- Floating action buttons -->
-    <div v-if="selectedIds.size > 0" class="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+    <div v-if="selectedIds.size > 0" class="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20" @mousedown.stop>
       <button
         @click="$emit('request-ai')"
         class="px-4 py-2 bg-brand-500 text-white rounded-full shadow-lg hover:bg-brand-600 flex items-center gap-2 text-sm font-medium transition-colors"
@@ -58,7 +64,8 @@ import SelectionBox from './SelectionBox.vue'
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
   zoom: { type: Number, default: 1 },
-  offset: { type: Object, default: () => ({ x: 0, y: 0 }) }
+  offset: { type: Object, default: () => ({ x: 0, y: 0 }) },
+  appBaseUrl: { type: String, default: '' }
 })
 
 const emit = defineEmits([
@@ -73,6 +80,7 @@ const worldEl = ref(null)
 // ---- State ----
 const selectedIds = ref(new Set())
 const isDragging = ref(false)
+const isResizing = ref(false)
 const isPanning = ref(false)
 const isSelecting = ref(false)
 const selectionRect = ref({ x: 0, y: 0, width: 0, height: 0 })

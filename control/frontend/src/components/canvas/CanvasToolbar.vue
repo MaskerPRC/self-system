@@ -62,14 +62,71 @@
         <i class="ph ph-text-t text-base"></i>
         <span class="hidden sm:inline">文本</span>
       </button>
-      <button
-        @click="$emit('add-iframe')"
-        class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-ink-600 hover:bg-stone-100 rounded-lg transition-colors"
-        title="添加应用"
-      >
-        <i class="ph ph-browser text-base"></i>
-        <span class="hidden sm:inline">应用</span>
-      </button>
+
+      <!-- App page selector dropdown -->
+      <div class="relative" ref="appDropdownRef">
+        <button
+          @click="toggleAppDropdown"
+          class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-ink-600 hover:bg-stone-100 rounded-lg transition-colors"
+          title="添加应用"
+        >
+          <i class="ph ph-browser text-base"></i>
+          <span class="hidden sm:inline">应用</span>
+          <i class="ph ph-caret-down text-xs text-ink-400"></i>
+        </button>
+        <div
+          v-if="appDropdownOpen"
+          class="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-72 bg-white rounded-xl border border-stone-200 shadow-lg z-30 overflow-hidden"
+        >
+          <!-- Search input -->
+          <div class="p-2 border-b border-stone-100">
+            <div class="relative">
+              <i class="ph ph-magnifying-glass text-sm text-ink-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+              <input
+                ref="appSearchInput"
+                v-model="appSearch"
+                placeholder="搜索页面路由或名称..."
+                class="w-full pl-8 pr-3 py-1.5 text-sm border border-stone-200 rounded-lg outline-none focus:border-brand-400 bg-stone-50 transition-colors"
+                @keydown.escape="appDropdownOpen = false"
+              />
+            </div>
+          </div>
+          <!-- Page list -->
+          <div class="max-h-60 overflow-y-auto py-1">
+            <div
+              v-for="page in filteredPages"
+              :key="page.id"
+              class="flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-stone-50 cursor-pointer transition-colors"
+              @click="selectApp(page)"
+            >
+              <div class="w-6 h-6 rounded bg-brand-50 flex items-center justify-center shrink-0">
+                <i class="ph ph-browser text-xs text-brand-500"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="text-ink-800 truncate text-sm">{{ page.title }}</div>
+                <div class="text-ink-400 truncate text-xs">{{ page.route_path }}</div>
+              </div>
+              <span
+                class="w-1.5 h-1.5 rounded-full shrink-0"
+                :class="page.status === 'active' ? 'bg-green-400' : 'bg-stone-300'"
+              ></span>
+            </div>
+            <div v-if="filteredPages.length === 0" class="px-3 py-4 text-center text-xs text-ink-400">
+              {{ pages.length === 0 ? '暂无页面' : '无匹配结果' }}
+            </div>
+          </div>
+          <!-- Custom route input -->
+          <div class="border-t border-stone-100 p-2">
+            <button
+              @click="addCustomRoute"
+              class="w-full flex items-center gap-2 px-2.5 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+            >
+              <i class="ph ph-plus text-base"></i>
+              手动输入路由
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Right: Zoom controls -->
@@ -137,7 +194,8 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 const props = defineProps({
   projects: { type: Array, default: () => [] },
   activeProject: { type: String, default: null },
-  zoom: { type: Number, default: 1 }
+  zoom: { type: Number, default: 1 },
+  pages: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits([
@@ -152,6 +210,12 @@ const renameValue = ref('')
 const renameTarget = ref(null)
 const renameInput = ref(null)
 
+// App page selector
+const appDropdownOpen = ref(false)
+const appDropdownRef = ref(null)
+const appSearch = ref('')
+const appSearchInput = ref(null)
+
 const activeProjectName = computed(() => {
   const p = props.projects.find(p => p.id === props.activeProject)
   return p ? p.name : '选择画布'
@@ -159,9 +223,39 @@ const activeProjectName = computed(() => {
 
 const zoomPercent = computed(() => Math.round(props.zoom * 100))
 
+const filteredPages = computed(() => {
+  const q = appSearch.value.toLowerCase().trim()
+  if (!q) return props.pages
+  return props.pages.filter(p =>
+    (p.title || '').toLowerCase().includes(q) ||
+    (p.route_path || '').toLowerCase().includes(q)
+  )
+})
+
 function selectProject(id) {
   emit('select-project', id)
   dropdownOpen.value = false
+}
+
+function toggleAppDropdown() {
+  appDropdownOpen.value = !appDropdownOpen.value
+  if (appDropdownOpen.value) {
+    appSearch.value = ''
+    nextTick(() => appSearchInput.value?.focus())
+  }
+}
+
+function selectApp(page) {
+  emit('add-iframe', { route: page.route_path, title: page.title })
+  appDropdownOpen.value = false
+}
+
+function addCustomRoute() {
+  appDropdownOpen.value = false
+  const route = prompt('输入应用路由路径（如 /todo）：')
+  if (route) {
+    emit('add-iframe', { route, title: route })
+  }
 }
 
 function startRename(project) {
@@ -185,6 +279,9 @@ function confirmRename() {
 function onClickOutside(e) {
   if (dropdownRef.value && !dropdownRef.value.contains(e.target)) {
     dropdownOpen.value = false
+  }
+  if (appDropdownRef.value && !appDropdownRef.value.contains(e.target)) {
+    appDropdownOpen.value = false
   }
 }
 
