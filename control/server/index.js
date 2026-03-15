@@ -20,6 +20,7 @@ import skillsRoutes from './routes/skills.routes.js';
 import gitRoutes from './routes/git.routes.js';
 import appRoutes from './routes/app.routes.js';
 import filesRoutes from './routes/files.routes.js';
+import canvasRoutes from './routes/canvas.routes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -42,6 +43,7 @@ app.use(skillsRoutes);
 app.use(gitRoutes);
 app.use(appRoutes);
 app.use(filesRoutes);
+app.use(canvasRoutes);
 
 // ==================== 日志流推送 ====================
 

@@ -101,6 +101,15 @@
         <span class="hidden sm:inline">AI 对话</span>
       </router-link>
 
+      <router-link
+        to="/canvas"
+        class="relative flex-1 sm:flex-initial px-2 sm:px-6 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center gap-2 no-underline whitespace-nowrap"
+        :class="$route.name === 'canvas' ? 'text-brand-700 bg-brand-50' : 'text-ink-500 hover:text-ink-900 bg-transparent hover:bg-stone-50'"
+      >
+        <i class="text-xl sm:text-lg" :class="$route.name === 'canvas' ? 'ph-fill ph-frame-corners' : 'ph ph-frame-corners'"></i>
+        <span class="hidden sm:inline">画板</span>
+      </router-link>
+
       <button
         @click="toggleLogs"
         class="relative flex-1 sm:flex-initial px-2 sm:px-4 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 flex items-center justify-center no-underline whitespace-nowrap"

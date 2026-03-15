@@ -63,6 +63,31 @@ db.exec(`
     value TEXT NOT NULL,
     updated_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '未命名项目',
+    description TEXT,
+    canvas_state TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS canvas_nodes (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    type TEXT NOT NULL CHECK (type IN ('text','image','file','iframe','request')),
+    content TEXT NOT NULL DEFAULT '{}',
+    x REAL NOT NULL DEFAULT 0,
+    y REAL NOT NULL DEFAULT 0,
+    width REAL NOT NULL DEFAULT 200,
+    height REAL NOT NULL DEFAULT 150,
+    z_index INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_canvas_nodes_project ON canvas_nodes(project_id);
 `);
 
 // ==================== 辅助函数 ====================
@@ -103,6 +128,12 @@ function transformRow(row, tableName) {
   if ('attachments' in result && typeof result.attachments === 'string') {
     try { result.attachments = JSON.parse(result.attachments); } catch { /* keep as string */ }
   }
+  if (tableName === 'canvas_nodes' && 'content' in result && typeof result.content === 'string') {
+    try { result.content = JSON.parse(result.content); } catch { /* keep as string */ }
+  }
+  if (tableName === 'projects' && 'canvas_state' in result && typeof result.canvas_state === 'string') {
+    try { result.canvas_state = JSON.parse(result.canvas_state); } catch { /* keep as string */ }
+  }
 
   return result;
 }
@@ -110,7 +141,7 @@ function transformRow(row, tableName) {
 /** 将 JS boolean 转为 SQLite 整数 */
 function transformValueForInsert(key, value) {
   if (typeof value === 'boolean') return value ? 1 : 0;
-  if ((key === 'attachments') && typeof value === 'object') return JSON.stringify(value);
+  if ((key === 'attachments' || key === 'content' || key === 'canvas_state') && typeof value === 'object') return JSON.stringify(value);
   return value;
 }
 
@@ -318,7 +349,7 @@ class QueryBuilder {
 
     // 添加默认时间戳
     if (!record.created_at) record.created_at = now;
-    if (this._table === 'conversations' || this._table === 'interactive_pages') {
+    if (this._table === 'conversations' || this._table === 'interactive_pages' || this._table === 'projects' || this._table === 'canvas_nodes') {
       if (!record.updated_at) record.updated_at = now;
     }
 
