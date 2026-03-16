@@ -342,24 +342,56 @@ router.post('/api/projects/:id/request', async (req, res) => {
         .filter(Boolean);
     }
 
-    // 2. 构建上下文字符串
-    const contextParts = contextNodes.map(node => {
+    // 2. 构建上下文字符串和附件列表
+    const contextParts = [];
+    const attachments = [];
+
+    for (const node of contextNodes) {
       const content = node.content || {};
       switch (node.type) {
         case 'text':
-          return content.text || '';
-        case 'image':
-          return `[Image: ${content.name || 'unnamed'}]`;
-        case 'file':
-          return `[File: ${content.name || 'unnamed'}]`;
+          if (content.text) contextParts.push(content.text);
+          break;
+        case 'image': {
+          const imgName = content.originalName || content.name || 'image';
+          contextParts.push(`[Image: ${imgName}]`);
+          // Add actual file as attachment so Claude can read it
+          if (content.src) {
+            // content.src is like /api/canvas/files/{projectId}/{filename}
+            // Resolve to actual file path
+            const urlPath = content.src;
+            const match = urlPath.match(/\/api\/canvas\/files\/([^/]+)\/(.+)/);
+            if (match) {
+              const filePath = pathResolve(__dirname, '../../../data/canvas', match[1], match[2]);
+              if (existsSync(filePath)) {
+                attachments.push({ path: filePath, name: imgName, type: 'image', size: 0 });
+              }
+            }
+          }
+          break;
+        }
+        case 'file': {
+          const fileName = content.name || 'file';
+          contextParts.push(`[File: ${fileName}]`);
+          if (content.url) {
+            const match = content.url.match(/\/api\/canvas\/files\/([^/]+)\/(.+)/);
+            if (match) {
+              const filePath = pathResolve(__dirname, '../../../data/canvas', match[1], match[2]);
+              if (existsSync(filePath)) {
+                attachments.push({ path: filePath, name: fileName, type: content.mimeType || 'file', size: content.size || 0 });
+              }
+            }
+          }
+          break;
+        }
         case 'iframe':
-          return `[App Page: ${content.route || content.url || 'unknown'}]`;
+          contextParts.push(`[App Page: ${content.route || content.url || 'unknown'}]`);
+          break;
         case 'request':
-          return `[Previous request: ${content.prompt || ''}]`;
-        default:
-          return '';
+          contextParts.push(`[Previous request: ${content.prompt || ''}]`);
+          break;
       }
-    }).filter(Boolean);
+    }
 
     const contextString = contextParts.length > 0
       ? `Context from canvas:\n${contextParts.join('\n')}\n\nUser request: ${prompt.trim()}`
@@ -455,7 +487,7 @@ router.post('/api/projects/:id/request', async (req, res) => {
         } catch {}
 
         // 执行 Claude Code
-        const result = await callClaudeCode(contextString, conversationId, history);
+        const result = await callClaudeCode(contextString, conversationId, history, attachments);
 
         // 检测新路由
         let newRoutes = [];
