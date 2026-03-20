@@ -4,21 +4,49 @@
     :style="positionStyle"
   >
     <div
-      class="pointer-events-auto w-72 bg-white rounded-xl shadow-xl border border-stone-200 overflow-hidden"
+      class="pointer-events-auto w-80 bg-white rounded-xl shadow-xl border border-stone-200 overflow-hidden"
       @mousedown.stop
     >
-      <!-- Header -->
-      <div class="flex items-center justify-between px-3 py-2 border-b border-stone-100 bg-stone-50/80">
-        <div class="flex items-center gap-1.5">
-          <i class="ph ph-lightning text-brand-500 text-sm"></i>
-          <span class="text-xs font-medium text-ink-700">{{ selectionSummary }}</span>
+      <!-- Attachment previews -->
+      <div v-if="selectedNodes.length" class="px-3 pt-3 pb-1">
+        <div class="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto">
+          <!-- Image attachment -->
+          <template v-for="node in selectedNodes" :key="node.id">
+            <div v-if="node.type === 'image'" class="flex items-center gap-1.5 bg-blue-50 rounded-lg px-2 py-1.5 text-xs text-ink-700 border border-blue-100">
+              <img
+                :src="node.content?.src"
+                class="w-8 h-8 rounded object-cover flex-shrink-0"
+                @error="(e) => e.target.style.display = 'none'"
+              />
+              <span class="max-w-[100px] truncate">{{ node.content?.originalName || '图片' }}</span>
+            </div>
+
+            <!-- File attachment -->
+            <div v-else-if="node.type === 'file'" class="flex items-center gap-1.5 bg-stone-100 rounded-lg px-2 py-1.5 text-xs text-ink-700">
+              <i :class="fileIcon(node.content)" class="text-sm flex-shrink-0"></i>
+              <span class="max-w-[100px] truncate">{{ node.content?.name || '文件' }}</span>
+              <span v-if="node.content?.size" class="text-ink-400 text-[10px]">({{ formatSize(node.content.size) }})</span>
+            </div>
+
+            <!-- Text attachment -->
+            <div v-else-if="node.type === 'text'" class="flex items-center gap-1.5 bg-stone-100 rounded-lg px-2 py-1.5 text-xs text-ink-700">
+              <i class="ph ph-text-aa text-sm text-ink-400 flex-shrink-0"></i>
+              <span class="max-w-[140px] truncate">{{ textPreview(node.content) }}</span>
+            </div>
+
+            <!-- Iframe/App attachment -->
+            <div v-else-if="node.type === 'iframe'" class="flex items-center gap-1.5 bg-blue-50 rounded-lg px-2 py-1.5 text-xs text-blue-700 border border-blue-100">
+              <i class="ph ph-browser text-sm flex-shrink-0"></i>
+              <span class="max-w-[100px] truncate">{{ node.content?.title || node.content?.route || '应用' }}</span>
+            </div>
+
+            <!-- Request attachment -->
+            <div v-else-if="node.type === 'request'" class="flex items-center gap-1.5 bg-amber-50 rounded-lg px-2 py-1.5 text-xs text-amber-700 border border-amber-100">
+              <i class="ph ph-lightning text-sm flex-shrink-0"></i>
+              <span class="max-w-[140px] truncate">{{ node.content?.prompt || '需求' }}</span>
+            </div>
+          </template>
         </div>
-        <button
-          @click="$emit('close')"
-          class="p-1 text-ink-400 hover:text-ink-700 rounded transition-colors"
-        >
-          <i class="ph ph-x text-sm"></i>
-        </button>
       </div>
 
       <!-- Input -->
@@ -52,7 +80,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 
 const props = defineProps({
   selectedNodes: { type: Array, default: () => [] },
@@ -67,8 +95,7 @@ const promptRef = ref(null)
 
 const positionStyle = computed(() => {
   const r = props.anchorRect
-  // Position below the selection, centered horizontally
-  const left = Math.max(8, Math.min(r.x + r.width / 2 - 144, window.innerWidth - 300))
+  const left = Math.max(8, Math.min(r.x + r.width / 2 - 160, window.innerWidth - 340))
   const top = r.y + r.height + 12
   return {
     left: `${left}px`,
@@ -76,18 +103,28 @@ const positionStyle = computed(() => {
   }
 })
 
-const selectionSummary = computed(() => {
-  const count = props.selectedNodes.length
-  if (count === 0) return '未选择'
-  const typeLabels = { text: '文本', image: '图片', file: '文件', iframe: '应用', request: '需求' }
-  const typeCounts = {}
-  for (const node of props.selectedNodes) {
-    const label = typeLabels[node.type] || node.type
-    typeCounts[label] = (typeCounts[label] || 0) + 1
-  }
-  const parts = Object.entries(typeCounts).map(([l, c]) => `${c}${l}`)
-  return `${parts.join(' + ')}`
-})
+function textPreview(content) {
+  const text = content?.text || ''
+  return text.length > 30 ? text.slice(0, 30) + '...' : text || '空文本'
+}
+
+function fileIcon(content) {
+  const mime = content?.mimeType || ''
+  if (mime.startsWith('image/')) return 'ph ph-image text-blue-500'
+  if (mime.includes('pdf')) return 'ph ph-file-pdf text-red-500'
+  if (mime.includes('zip') || mime.includes('rar') || mime.includes('7z')) return 'ph ph-file-zip text-yellow-600'
+  if (mime.includes('text') || mime.includes('json') || mime.includes('xml')) return 'ph ph-file-text text-ink-500'
+  if (mime.includes('video')) return 'ph ph-file-video text-purple-500'
+  if (mime.includes('audio')) return 'ph ph-file-audio text-green-500'
+  return 'ph ph-file text-ink-400'
+}
+
+function formatSize(bytes) {
+  if (!bytes) return ''
+  if (bytes < 1024) return bytes + 'B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + 'MB'
+}
 
 function submit() {
   if (!prompt.value.trim() || props.loading) return
