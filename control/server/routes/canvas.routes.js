@@ -13,8 +13,6 @@ import { requestQueue, abortedConversations } from '../modules/queue.js';
 import { extractNaturalText, extractResponse, extractFileInfo, extractAndSaveSkill, extractPageInfo, parseRoutePaths } from '../helpers/output-parser.js';
 import { extractStructuredOutput, isOpenRouterConfigured } from '../modules/openrouter.js';
 import { collectAllFiles, scanNewFiles, mergeFileAttachments, rescueMisplacedFiles, verifyAppAfterChange } from '../helpers/file-utils.js';
-import { sqliteDb } from '../modules/sqlite.js';
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const router = express.Router();
 
@@ -154,29 +152,22 @@ router.patch('/api/projects/:id/nodes/batch', async (req, res) => {
     }
 
     const projectId = req.params.id;
+    const supabase = getSupabase();
     const now = new Date().toISOString();
 
-    const batchUpdate = sqliteDb.transaction((items) => {
-      for (const item of items) {
-        const sets = [];
-        const vals = [];
-        if (item.x !== undefined) { sets.push('x = ?'); vals.push(item.x); }
-        if (item.y !== undefined) { sets.push('y = ?'); vals.push(item.y); }
-        if (item.width !== undefined) { sets.push('width = ?'); vals.push(item.width); }
-        if (item.height !== undefined) { sets.push('height = ?'); vals.push(item.height); }
-        if (sets.length === 0) continue;
-        sets.push('updated_at = ?');
-        vals.push(now, item.id, projectId);
-        sqliteDb.prepare(
-          `UPDATE canvas_nodes SET ${sets.join(', ')} WHERE id = ? AND project_id = ?`
-        ).run(...vals);
-      }
-    });
+    await Promise.all(updates.map(item => {
+      const updateData = { updated_at: now };
+      if (item.x !== undefined) updateData.x = item.x;
+      if (item.y !== undefined) updateData.y = item.y;
+      if (item.width !== undefined) updateData.width = item.width;
+      if (item.height !== undefined) updateData.height = item.height;
+      if (Object.keys(updateData).length <= 1) return Promise.resolve();
+      return supabase
+        .from('canvas_nodes')
+        .update(updateData)
+        .eq('id', item.id);
+    }));
 
-    batchUpdate(updates);
-
-    // Fetch updated nodes
-    const supabase = getSupabase();
     const { data, error } = await supabase
       .from('canvas_nodes')
       .select('*')
@@ -197,11 +188,10 @@ router.post('/api/projects/:id/nodes/batch-delete', async (req, res) => {
       return res.status(400).json({ success: false, error: '删除列表不能为空' });
     }
 
-    const projectId = req.params.id;
-    const placeholders = ids.map(() => '?').join(', ');
-    sqliteDb.prepare(
-      `DELETE FROM canvas_nodes WHERE id IN (${placeholders}) AND project_id = ?`
-    ).run(...ids, projectId);
+    const supabase = getSupabase();
+    await Promise.all(ids.map(id =>
+      supabase.from('canvas_nodes').delete().eq('id', id)
+    ));
 
     res.json({ success: true });
   } catch (error) {

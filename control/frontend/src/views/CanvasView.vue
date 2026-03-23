@@ -137,6 +137,17 @@ async function fetchNodes(projectId) {
 function selectProject(id) {
   activeProject.value = id
   localStorage.setItem('activeCanvasProject', id)
+
+  const project = projects.value.find(p => p.id === id)
+  const state = project?.canvas_state
+  if (state && typeof state === 'object' && state.zoom != null) {
+    zoom.value = state.zoom
+    offset.value = state.offset || { x: 0, y: 0 }
+  } else {
+    zoom.value = 1
+    offset.value = { x: 0, y: 0 }
+  }
+
   fetchNodes(id)
 }
 
@@ -364,6 +375,27 @@ async function handleAiRequest(prompt) {
   }
 }
 
+// ---- Persist viewport state ----
+
+let canvasStateSaveTimer = null
+
+watch([zoom, offset], () => {
+  if (!activeProject.value) return
+  clearTimeout(canvasStateSaveTimer)
+  canvasStateSaveTimer = setTimeout(async () => {
+    if (!activeProject.value) return
+    try {
+      await fetch(`${API}/api/projects/${activeProject.value}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          canvas_state: { zoom: zoom.value, offset: { x: offset.value.x, y: offset.value.y } }
+        })
+      })
+    } catch {}
+  }, 500)
+}, { deep: true })
+
 // ---- Zoom ----
 
 function zoomIn() {
@@ -431,6 +463,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearTimeout(canvasStateSaveTimer)
   if (ws) ws.close()
 })
 </script>
