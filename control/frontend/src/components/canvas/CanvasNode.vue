@@ -24,6 +24,9 @@
       :width="node.width"
       :height="node.height"
       :appBaseUrl="appBaseUrl"
+      :nodeId="node.id"
+      :runtime="runtime"
+      @update-ports="(ports) => $emit('update-content', { ...node.content, ports })"
     />
     <RequestNode
       v-else-if="node.type === 'request'"

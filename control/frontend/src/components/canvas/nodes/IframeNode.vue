@@ -4,6 +4,7 @@
     <div class="h-8 bg-stone-800 text-white text-xs flex items-center px-2 gap-2 shrink-0 rounded-t-lg">
       <i class="ph ph-browser text-sm text-stone-400"></i>
       <span class="flex-1 truncate text-stone-300">{{ content?.title || content?.route || '/' }}</span>
+      <span v-if="bridgeConnected" class="w-1.5 h-1.5 rounded-full bg-green-400" title="已连接画布桥"></span>
       <button
         @click.stop="refresh"
         class="p-0.5 text-stone-400 hover:text-white transition-colors"
@@ -34,17 +35,22 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   content: { type: Object, default: () => ({ route: '/', title: '' }) },
   isDragging: { type: Boolean, default: false },
   width: { type: Number, default: 480 },
   height: { type: Number, default: 360 },
-  appBaseUrl: { type: String, default: '' }
+  appBaseUrl: { type: String, default: '' },
+  nodeId: { type: String, default: '' },
+  runtime: { type: Object, default: null },
 })
 
+const emit = defineEmits(['update-ports'])
+
 const iframeRef = ref(null)
+const bridgeConnected = ref(false)
 
 const appUrl = computed(() => {
   const route = props.content?.route || '/'
@@ -54,7 +60,125 @@ const appUrl = computed(() => {
 
 function refresh() {
   if (iframeRef.value) {
+    bridgeConnected.value = false
     iframeRef.value.src = iframeRef.value.src
   }
 }
+
+// ---- Bridge: postMessage communication with iframe app ----
+
+function handleMessage(event) {
+  // Only accept messages from our iframe
+  if (!iframeRef.value || event.source !== iframeRef.value.contentWindow) return
+  const data = event.data
+  if (!data || data.source !== 'canvas-app') return
+
+  switch (data.type) {
+    case 'ready':
+      // App announced itself, send ping and register ports
+      bridgeConnected.value = true
+      if (data.manifest?.ports) {
+        emit('update-ports', data.manifest.ports)
+      }
+      // Send ping to confirm connection
+      sendToIframe({ type: 'ping' })
+      // Send current input values
+      syncInputsToIframe()
+      break
+
+    case 'pong':
+      bridgeConnected.value = true
+      if (data.manifest?.ports) {
+        emit('update-ports', data.manifest.ports)
+      }
+      break
+
+    case 'data-output':
+      // App is pushing a data output value → forward to runtime
+      if (props.runtime && props.nodeId && data.portId) {
+        props.runtime.setDataOutput(props.nodeId, data.portId, data.value)
+      }
+      break
+
+    case 'control-output':
+      // App is emitting a control signal → forward to runtime
+      if (props.runtime && props.nodeId && data.portId) {
+        props.runtime.emitControl(props.nodeId, data.portId)
+      }
+      break
+  }
+}
+
+function sendToIframe(msg) {
+  if (!iframeRef.value?.contentWindow) return
+  iframeRef.value.contentWindow.postMessage({
+    source: 'canvas-runtime',
+    ...msg,
+  }, '*')
+}
+
+/**
+ * Send all current runtime input values to the iframe
+ */
+function syncInputsToIframe() {
+  if (!props.runtime || !props.nodeId) return
+  const state = props.runtime.nodeStates[props.nodeId]
+  if (state?.inputs) {
+    for (const [portId, value] of Object.entries(state.inputs)) {
+      sendToIframe({ type: 'set-data-input', portId, value })
+    }
+  }
+}
+
+// Watch for runtime input changes and forward to iframe
+let stopInputWatch = null
+let controlUnsubscribes = []
+
+function subscribeControlPorts() {
+  // Clean up old subscriptions
+  for (const unsub of controlUnsubscribes) unsub()
+  controlUnsubscribes = []
+
+  if (!props.runtime || !props.nodeId) return
+  const ports = props.content?.ports
+  if (ports?.controlIn) {
+    for (const port of ports.controlIn) {
+      const unsub = props.runtime.onControl(props.nodeId, port.id, () => {
+        sendToIframe({ type: 'trigger-control', portId: port.id })
+      })
+      controlUnsubscribes.push(unsub)
+    }
+  }
+}
+
+// Re-subscribe when ports change (e.g., manifest loaded from bridge)
+watch(() => props.content?.ports, () => {
+  subscribeControlPorts()
+}, { deep: true })
+
+onMounted(() => {
+  window.addEventListener('message', handleMessage)
+
+  if (props.runtime && props.nodeId) {
+    // Watch data input changes → forward to iframe
+    stopInputWatch = watch(
+      () => props.runtime.nodeStates[props.nodeId]?.inputs,
+      (inputs) => {
+        if (!inputs || !bridgeConnected.value) return
+        for (const [portId, value] of Object.entries(inputs)) {
+          sendToIframe({ type: 'set-data-input', portId, value })
+        }
+      },
+      { deep: true }
+    )
+
+    subscribeControlPorts()
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('message', handleMessage)
+  if (stopInputWatch) stopInputWatch()
+  for (const unsub of controlUnsubscribes) unsub()
+})
 </script>
