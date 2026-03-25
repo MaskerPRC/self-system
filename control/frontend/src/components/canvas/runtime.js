@@ -24,6 +24,18 @@ export function createRuntime() {
 
   function setEdges(newEdges) {
     edges = newEdges
+    // Re-propagate all existing outputs through new edges
+    // This handles the case where nodes initialized before edges were loaded
+    for (const edge of edges) {
+      if (edge.edge_type !== 'data') continue
+      const srcState = nodeStates[edge.from_node_id]
+      if (!srcState?.outputs) continue
+      const value = srcState.outputs[edge.from_port_id]
+      if (value !== undefined) {
+        const targetState = ensureNodeState(edge.to_node_id)
+        targetState.inputs[edge.to_port_id] = value
+      }
+    }
   }
 
   /**
