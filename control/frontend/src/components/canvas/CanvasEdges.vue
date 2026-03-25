@@ -91,8 +91,8 @@ function getPortPosition(nodeId, portId, portKind) {
   const side = isInput ? 'left' : 'right'
 
   const sideList = side === 'left'
-    ? [...(ports.dataIn || []), ...(ports.controlIn || [])]
-    : [...(ports.dataOut || []), ...(ports.controlOut || [])]
+    ? [...(ports.controlIn || []), ...(ports.dataIn || [])]
+    : [...(ports.controlOut || []), ...(ports.dataOut || [])]
 
   const index = sideList.findIndex(p => p.id === portId)
   if (index === -1) return null

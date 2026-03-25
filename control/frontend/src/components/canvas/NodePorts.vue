@@ -18,14 +18,18 @@
         :data-port-id="port.id"
         :data-port-kind="port.kind"
       ></div>
-      <span class="text-[10px] text-ink-500 whitespace-nowrap pointer-events-none select-none">{{ port.name }}</span>
+      <!-- Label outside the node (to the left) -->
+      <span
+        class="absolute text-[10px] whitespace-nowrap pointer-events-none select-none right-full mr-2"
+        :class="port.kind.startsWith('control') ? 'text-orange-500 font-medium' : 'text-ink-500'"
+      >{{ port.name }}</span>
     </div>
 
     <!-- Right side: output ports -->
     <div
       v-for="(port, i) in rightPorts"
       :key="'r-' + port.id"
-      class="absolute flex items-center gap-1 flex-row-reverse"
+      class="absolute flex items-center gap-1"
       :style="rightPortStyle(i)"
     >
       <div
@@ -39,7 +43,11 @@
         :data-port-id="port.id"
         :data-port-kind="port.kind"
       ></div>
-      <span class="text-[10px] text-ink-500 whitespace-nowrap pointer-events-none select-none">{{ port.name }}</span>
+      <!-- Label outside the node (to the right) -->
+      <span
+        class="absolute text-[10px] whitespace-nowrap pointer-events-none select-none left-full ml-2"
+        :class="port.kind.startsWith('control') ? 'text-orange-500 font-medium' : 'text-ink-500'"
+      >{{ port.name }}</span>
     </div>
   </div>
 </template>
@@ -57,16 +65,16 @@ const props = defineProps({
 
 defineEmits(['port-mousedown', 'port-mouseup'])
 
-// Left ports = inputs (data-in at top, control-in at bottom)
+// Left ports = inputs (control-in first, then data-in)
 const leftPorts = computed(() => [
-  ...props.ports.dataIn.map(p => ({ ...p, kind: 'data-in' })),
   ...props.ports.controlIn.map(p => ({ ...p, kind: 'control-in' })),
+  ...props.ports.dataIn.map(p => ({ ...p, kind: 'data-in' })),
 ])
 
-// Right ports = outputs (data-out at top, control-out at bottom)
+// Right ports = outputs (control-out first, then data-out)
 const rightPorts = computed(() => [
-  ...props.ports.dataOut.map(p => ({ ...p, kind: 'data-out' })),
   ...props.ports.controlOut.map(p => ({ ...p, kind: 'control-out' })),
+  ...props.ports.dataOut.map(p => ({ ...p, kind: 'data-out' })),
 ])
 
 const HEADER_HEIGHT = 28  // height of node header
