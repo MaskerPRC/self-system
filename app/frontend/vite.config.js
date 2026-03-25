@@ -2,11 +2,17 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path'
 
 // 控制后端地址：Docker 环境通过网络名称访问，本地开发用 localhost
 const controlBackend = process.env.CONTROL_BACKEND_URL || 'http://localhost:3000'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+    },
+  },
   plugins: [
     vue(),
     tailwindcss(),
