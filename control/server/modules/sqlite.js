@@ -76,7 +76,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS canvas_nodes (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    type TEXT NOT NULL CHECK (type IN ('text','image','file','iframe','request','text-input','number-input','button','image-viewer')),
+    type TEXT NOT NULL,
     content TEXT NOT NULL DEFAULT '{}',
     x REAL NOT NULL DEFAULT 0,
     y REAL NOT NULL DEFAULT 0,
@@ -125,9 +125,9 @@ try {
 // ==================== 迁移：更新 canvas_nodes 类型约束 ====================
 // SQLite 不支持 ALTER CHECK，需要重建表来支持新的节点类型
 try {
-  // 检查是否需要迁移：读取表 DDL 来判断是否包含新类型
+  // 检查是否需要迁移：如果 type 列还有 CHECK 约束，需要重建表去掉它
   const tableInfo = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='canvas_nodes'`).get();
-  const needsMigration = tableInfo && tableInfo.sql && !tableInfo.sql.includes('text-input');
+  const needsMigration = tableInfo && tableInfo.sql && tableInfo.sql.includes('CHECK');
   if (needsMigration) {
     // CHECK 约束不支持新类型，需要重建表
     console.log('[SQLite] Migrating canvas_nodes table to support new node types...');
@@ -137,7 +137,7 @@ try {
       CREATE TABLE canvas_nodes_new (
         id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-        type TEXT NOT NULL CHECK (type IN ('text','image','file','iframe','request','text-input','number-input','button','image-viewer')),
+        type TEXT NOT NULL,
         content TEXT NOT NULL DEFAULT '{}',
         x REAL NOT NULL DEFAULT 0,
         y REAL NOT NULL DEFAULT 0,

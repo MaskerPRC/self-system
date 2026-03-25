@@ -54,7 +54,7 @@ CREATE TABLE projects (
 CREATE TABLE canvas_nodes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('text', 'image', 'file', 'iframe', 'request')),
+  type TEXT NOT NULL,
   content JSONB NOT NULL DEFAULT '{}',
   x DOUBLE PRECISION NOT NULL DEFAULT 0,
   y DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -66,3 +66,19 @@ CREATE TABLE canvas_nodes (
 );
 
 CREATE INDEX idx_canvas_nodes_project ON canvas_nodes(project_id);
+
+-- 画板连线
+CREATE TABLE canvas_edges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  from_node_id UUID NOT NULL REFERENCES canvas_nodes(id) ON DELETE CASCADE,
+  from_port_id TEXT NOT NULL,
+  to_node_id UUID NOT NULL REFERENCES canvas_nodes(id) ON DELETE CASCADE,
+  to_port_id TEXT NOT NULL,
+  edge_type TEXT NOT NULL CHECK (edge_type IN ('data', 'control')),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_canvas_edges_project ON canvas_edges(project_id);
+CREATE INDEX idx_canvas_edges_from ON canvas_edges(from_node_id);
+CREATE INDEX idx_canvas_edges_to ON canvas_edges(to_node_id);
