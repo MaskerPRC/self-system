@@ -1,5 +1,5 @@
 <template>
-  <svg class="absolute top-0 left-0 w-0 h-0 pointer-events-none overflow-visible" style="z-index: 5">
+  <svg class="absolute top-0 left-0 pointer-events-none" style="z-index: 5; width: 1px; height: 1px; overflow: visible">
     <!-- Existing edges -->
     <g v-for="edge in edgePaths" :key="edge.id">
       <path

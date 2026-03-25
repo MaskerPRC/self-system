@@ -51,8 +51,8 @@
 
     <!-- Interaction overlay: captures mouse during drag/resize to prevent iframe/node interference -->
     <div v-if="isDragging || isResizing" class="absolute inset-0 z-10 cursor-se-resize" :class="{ 'cursor-move': isDragging }"></div>
-    <!-- Edge drag overlay: transparent but allows port mouseup events through -->
-    <div v-if="edgeDrag" class="absolute inset-0 z-10 cursor-crosshair" @mouseup="onEdgeDragEnd"></div>
+    <!-- Edge drag overlay: captures mousemove for live preview, mouseup to complete -->
+    <div v-if="edgeDrag" class="absolute inset-0 z-10 cursor-crosshair" @mousemove="onEdgeDragMove" @mouseup="onEdgeDragEnd"></div>
 
     <!-- Floating action buttons -->
     <div v-if="selectedIds.size > 0" class="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20" @mousedown.stop>
@@ -163,10 +163,13 @@ function onPortMouseUp({ port, event }) {
 }
 
 function onCanvasMouseMove(e) {
-  if (edgeDrag.value) {
-    const worldPos = screenToWorld(e.clientX, e.clientY)
-    edgeDrag.value = { ...edgeDrag.value, mouseX: worldPos.x, mouseY: worldPos.y }
-  }
+  // Edge drag move is now handled by the overlay's onEdgeDragMove
+}
+
+function onEdgeDragMove(e) {
+  if (!edgeDrag.value) return
+  const worldPos = screenToWorld(e.clientX, e.clientY)
+  edgeDrag.value = { ...edgeDrag.value, mouseX: worldPos.x, mouseY: worldPos.y }
 }
 
 function onEdgeDragEnd(e) {
