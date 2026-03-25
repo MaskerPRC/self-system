@@ -319,17 +319,18 @@ ${requirement}
     - 完成/失败事件 → 映射为 controlOut 端口
     - valueType 可选值：string、number、boolean、image、json、file、any
     - 每个应用至少要有一个 controlIn 端口
-12. 【定时任务规范】如果功能涉及定时任务（setInterval/setTimeout），必须遵守：
+12. 【严禁前端直接调用外部 API / 模型 API】所有需要 API Key 的外部服务调用（LLM 模型 API、OpenRouter、第三方 SaaS API 等）必须放在后端（app/server/）实现，前端通过 fetch('/api/xxx') 调用后端接口。严禁在前端代码中直接调用外部 API 或暴露 API Key。正确做法：后端创建 /api/xxx 路由调用外部服务，前端只调用自己的后端。
+13. 【定时任务规范】如果功能涉及定时任务（setInterval/setTimeout），必须遵守：
     - 严禁在模块顶层或导入时直接调用昂贵操作（LLM 调用、外部 API 请求等）
     - App 后端使用 node --watch 开发模式，文件变动会频繁重启，所有定时任务必须自带启动冷却期（至少 60 秒延迟）
     - 标准写法：setTimeout(() => { doTask(); setInterval(doTask, INTERVAL); }, 60000);
     - 禁止写法：启动时立即执行昂贵操作，或没有冷却期的定时任务
-13. 【PWA / 移动端适配】项目已配置 PWA 支持，所有新页面必须：
+14. 【PWA / 移动端适配】项目已配置 PWA 支持，所有新页面必须：
     - 使用响应式布局，确保手机屏幕正常显示
     - 通过 document.title 设置页面标题
     - API 请求失败时给出友好提示而非白屏
     - 按钮和交互元素有足够的点击区域（最小 44x44px），适合手指操作
-14. 【输出格式标记】完成页面创建/修改后，在回复末尾输出以下标记供系统解析：
+15. 【输出格式标记】完成页面创建/修改后，在回复末尾输出以下标记供系统解析：
     [PAGE_INFO] route: /xxx title: 页面标题 [/PAGE_INFO]
     如果生成了文件：[FILE_INFO] path: xxx name: xxx type: xxx size: xxx [/FILE_INFO]
     如果是纯文本回复（不涉及代码修改）：[RESPONSE] 回复内容 [/RESPONSE]
