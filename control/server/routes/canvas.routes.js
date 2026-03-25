@@ -235,6 +235,76 @@ router.delete('/api/projects/:id/nodes/:nodeId', async (req, res) => {
   }
 });
 
+// ==================== Canvas 边（连接）CRUD API ====================
+
+router.get('/api/projects/:id/edges', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('canvas_edges')
+      .select('*')
+      .eq('project_id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/api/projects/:id/edges', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { from_node_id, from_port_id, to_node_id, to_port_id, edge_type } = req.body;
+    if (!from_node_id || !from_port_id || !to_node_id || !to_port_id || !edge_type) {
+      return res.status(400).json({ success: false, error: '缺少必填字段' });
+    }
+
+    // Prevent duplicate edges
+    const { data: existing } = await supabase
+      .from('canvas_edges')
+      .select('id')
+      .eq('project_id', req.params.id)
+      .eq('from_node_id', from_node_id)
+      .eq('from_port_id', from_port_id)
+      .eq('to_node_id', to_node_id)
+      .eq('to_port_id', to_port_id);
+    if (existing && existing.length > 0) {
+      return res.json({ success: true, data: existing[0] });
+    }
+
+    const { data, error } = await supabase
+      .from('canvas_edges')
+      .insert({
+        project_id: req.params.id,
+        from_node_id,
+        from_port_id,
+        to_node_id,
+        to_port_id,
+        edge_type
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/api/projects/:id/edges/:edgeId', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from('canvas_edges')
+      .delete()
+      .eq('id', req.params.edgeId);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== Canvas 文件上传 API ====================
 
 const canvasUpload = multer({

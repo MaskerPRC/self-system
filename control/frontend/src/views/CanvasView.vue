@@ -11,6 +11,10 @@
       @delete-project="deleteProject"
       @add-text="addTextNode"
       @add-iframe="addIframeNode"
+      @add-text-input="addTextInputNode"
+      @add-number-input="addNumberInputNode"
+      @add-button="addButtonNode"
+      @add-image-viewer="addImageViewerNode"
       @zoom-in="zoomIn"
       @zoom-out="zoomOut"
       @zoom-reset="zoomReset"
@@ -19,9 +23,11 @@
       <InfiniteCanvas
         ref="canvasRef"
         :nodes="nodes"
+        :edges="edges"
         :zoom="zoom"
         :offset="offset"
         :appBaseUrl="appBaseUrl"
+        :runtime="runtime"
         @update:zoom="zoom = $event"
         @update:offset="offset = $event"
         @update-node="handleUpdateNode"
@@ -31,6 +37,8 @@
         @select-nodes="onSelectNodes"
         @request-ai="showRequestPanel = true"
         @upload-files="handleUploadFiles"
+        @create-edge="handleCreateEdge"
+        @delete-edge="handleDeleteEdge"
       />
       <RequestPanel
         v-if="showRequestPanel"
@@ -49,13 +57,18 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import CanvasToolbar from '../components/canvas/CanvasToolbar.vue'
 import InfiniteCanvas from '../components/canvas/InfiniteCanvas.vue'
 import RequestPanel from '../components/canvas/RequestPanel.vue'
+import { createRuntime } from '../components/canvas/runtime.js'
 
 const API = ''
+
+// ---- Runtime Engine ----
+const runtime = createRuntime()
 
 // ---- Projects ----
 const projects = ref([])
 const activeProject = ref(null)
 const nodes = ref([])
+const edges = ref([])
 const zoom = ref(1)
 const offset = ref({ x: 0, y: 0 })
 const canvasRef = ref(null)
@@ -64,6 +77,11 @@ const requestLoading = ref(false)
 const selectedNodeIds = ref([])
 const pages = ref([])
 const appBaseUrl = ref(`http://${location.hostname}:5174`)
+
+// Keep runtime edges in sync
+watch(edges, (newEdges) => {
+  runtime.setEdges(newEdges)
+}, { deep: true })
 
 const selectedNodes = computed(() => {
   return nodes.value.filter(n => selectedNodeIds.value.includes(n.id))
@@ -134,6 +152,17 @@ async function fetchNodes(projectId) {
   }
 }
 
+async function fetchEdges(projectId) {
+  if (!projectId) { edges.value = []; return }
+  try {
+    const r = await fetch(`${API}/api/projects/${projectId}/edges`)
+    const d = await r.json()
+    if (d.success) edges.value = d.data || []
+  } catch (e) {
+    console.error('Failed to fetch edges:', e)
+  }
+}
+
 function selectProject(id) {
   activeProject.value = id
   localStorage.setItem('activeCanvasProject', id)
@@ -149,6 +178,7 @@ function selectProject(id) {
   }
 
   fetchNodes(id)
+  fetchEdges(id)
 }
 
 async function createProject(name) {
@@ -194,6 +224,7 @@ async function deleteProject(id) {
       } else {
         activeProject.value = null
         nodes.value = []
+        edges.value = []
         localStorage.removeItem('activeCanvasProject')
         await createProject('默认画布')
       }
@@ -238,6 +269,54 @@ function addIframeNode(pageInfo) {
     width: 480,
     height: 360,
     content: { route, title }
+  })
+}
+
+function addTextInputNode() {
+  const center = getViewportCenter()
+  handleCreateNode({
+    type: 'text-input',
+    x: center.x - 100,
+    y: center.y - 50,
+    width: 200,
+    height: 100,
+    content: { text: '' }
+  })
+}
+
+function addNumberInputNode() {
+  const center = getViewportCenter()
+  handleCreateNode({
+    type: 'number-input',
+    x: center.x - 80,
+    y: center.y - 45,
+    width: 160,
+    height: 90,
+    content: { number: 0 }
+  })
+}
+
+function addButtonNode() {
+  const center = getViewportCenter()
+  handleCreateNode({
+    type: 'button',
+    x: center.x - 80,
+    y: center.y - 40,
+    width: 160,
+    height: 80,
+    content: { label: '执行' }
+  })
+}
+
+function addImageViewerNode() {
+  const center = getViewportCenter()
+  handleCreateNode({
+    type: 'image-viewer',
+    x: center.x - 150,
+    y: center.y - 120,
+    width: 300,
+    height: 240,
+    content: {}
   })
 }
 
@@ -291,6 +370,8 @@ async function handleUpdateNodesBatch(updates) {
 
 async function handleDeleteNodes(ids) {
   nodes.value = nodes.value.filter(n => !ids.includes(n.id))
+  // Also remove edges connected to deleted nodes
+  edges.value = edges.value.filter(e => !ids.includes(e.from_node_id) && !ids.includes(e.to_node_id))
   try {
     await fetch(`${API}/api/projects/${activeProject.value}/nodes/batch-delete`, {
       method: 'POST',
@@ -304,6 +385,40 @@ async function handleDeleteNodes(ids) {
 
 function onSelectNodes(ids) {
   selectedNodeIds.value = ids
+}
+
+// ---- Edge CRUD ----
+
+async function handleCreateEdge(edgeData) {
+  if (!activeProject.value) return
+  try {
+    const r = await fetch(`${API}/api/projects/${activeProject.value}/edges`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(edgeData)
+    })
+    const d = await r.json()
+    if (d.success && d.data) {
+      // Avoid duplicates
+      if (!edges.value.find(e => e.id === d.data.id)) {
+        edges.value.push(d.data)
+      }
+    }
+  } catch (e) {
+    console.error('Failed to create edge:', e)
+  }
+}
+
+async function handleDeleteEdge(edgeId) {
+  edges.value = edges.value.filter(e => e.id !== edgeId)
+  if (!activeProject.value) return
+  try {
+    await fetch(`${API}/api/projects/${activeProject.value}/edges/${edgeId}`, {
+      method: 'DELETE'
+    })
+  } catch (e) {
+    console.error('Failed to delete edge:', e)
+  }
 }
 
 // ---- File Upload ----

@@ -63,6 +63,47 @@
         <span class="hidden sm:inline">文本</span>
       </button>
 
+      <!-- Orchestration node types -->
+      <div class="w-px h-5 bg-stone-200 mx-1"></div>
+
+      <button
+        @click="$emit('add-text-input')"
+        class="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+        title="文本输入节点"
+      >
+        <i class="ph ph-text-aa text-base"></i>
+        <span class="hidden lg:inline">输入</span>
+      </button>
+
+      <button
+        @click="$emit('add-number-input')"
+        class="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+        title="数值输入节点"
+      >
+        <i class="ph ph-hash text-base"></i>
+        <span class="hidden lg:inline">数值</span>
+      </button>
+
+      <button
+        @click="$emit('add-button')"
+        class="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+        title="控制按钮节点"
+      >
+        <i class="ph ph-cursor-click text-base"></i>
+        <span class="hidden lg:inline">按钮</span>
+      </button>
+
+      <button
+        @click="$emit('add-image-viewer')"
+        class="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+        title="图片预览节点"
+      >
+        <i class="ph ph-image text-base"></i>
+        <span class="hidden lg:inline">图片</span>
+      </button>
+
+      <div class="w-px h-5 bg-stone-200 mx-1"></div>
+
       <!-- App page selector dropdown -->
       <div class="relative" ref="appDropdownRef">
         <button
@@ -200,7 +241,9 @@ const props = defineProps({
 
 const emit = defineEmits([
   'select-project', 'create-project', 'rename-project', 'delete-project',
-  'add-text', 'add-iframe', 'zoom-in', 'zoom-out', 'zoom-reset'
+  'add-text', 'add-iframe',
+  'add-text-input', 'add-number-input', 'add-button', 'add-image-viewer',
+  'zoom-in', 'zoom-out', 'zoom-reset'
 ])
 
 const dropdownOpen = ref(false)

@@ -4,6 +4,8 @@
     class="w-full h-full relative cursor-default select-none"
     :class="{ 'cursor-grab': spacePressed && !isPanning, 'cursor-grabbing': isPanning }"
     @mousedown="onMouseDown"
+    @mousemove="onCanvasMouseMove"
+    @mouseup="onCanvasMouseUp"
     @wheel.prevent="onWheel"
     @dragover.prevent
     @drop.prevent="onDrop"
@@ -15,6 +17,15 @@
 
     <!-- World container -->
     <div ref="worldEl" class="absolute origin-top-left" :style="worldStyle">
+      <!-- Edge SVG layer (behind nodes) -->
+      <CanvasEdges
+        :edges="edges"
+        :nodes="nodes"
+        :zoom="zoom"
+        :dragging="edgeDrag"
+        @delete-edge="(id) => $emit('delete-edge', id)"
+      />
+
       <CanvasNode
         v-for="node in nodes"
         :key="node.id"
@@ -23,11 +34,15 @@
         :zoom="zoom"
         :isDraggingAny="isDragging || isResizing"
         :appBaseUrl="appBaseUrl"
+        :runtime="runtime"
+        :connectedPorts="connectedPorts"
         @mousedown.stop="onNodeMouseDown($event, node)"
         @update-content="(content) => $emit('update-node', { id: node.id, content })"
         @resize="(size) => $emit('update-node', { id: node.id, ...size })"
         @resize-start="isResizing = true"
         @resize-end="isResizing = false"
+        @port-mousedown="onPortMouseDown"
+        @port-mouseup="onPortMouseUp"
       />
     </div>
 
@@ -36,6 +51,8 @@
 
     <!-- Interaction overlay: captures mouse during drag/resize to prevent iframe/node interference -->
     <div v-if="isDragging || isResizing" class="absolute inset-0 z-10 cursor-se-resize" :class="{ 'cursor-move': isDragging }"></div>
+    <!-- Edge drag overlay: transparent but allows port mouseup events through -->
+    <div v-if="edgeDrag" class="absolute inset-0 z-10 cursor-crosshair" @mouseup="onEdgeDragEnd"></div>
 
     <!-- Floating action buttons -->
     <div v-if="selectedIds.size > 0" class="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20" @mousedown.stop>
@@ -59,19 +76,24 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import CanvasNode from './CanvasNode.vue'
+import CanvasEdges from './CanvasEdges.vue'
 import SelectionBox from './SelectionBox.vue'
+import { getEdgeType } from './ports.js'
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
+  edges: { type: Array, default: () => [] },
   zoom: { type: Number, default: 1 },
   offset: { type: Object, default: () => ({ x: 0, y: 0 }) },
-  appBaseUrl: { type: String, default: '' }
+  appBaseUrl: { type: String, default: '' },
+  runtime: { type: Object, default: null },
 })
 
 const emit = defineEmits([
   'update:zoom', 'update:offset',
   'update-node', 'update-nodes-batch', 'delete-nodes',
-  'create-node', 'select-nodes', 'request-ai', 'upload-files'
+  'create-node', 'select-nodes', 'request-ai', 'upload-files',
+  'create-edge', 'delete-edge'
 ])
 
 const canvasEl = ref(null)
@@ -90,6 +112,97 @@ let dragMoved = false
 let panStart = null
 let selectStart = null
 let updateDebounce = null
+
+// ---- Edge dragging state ----
+const edgeDrag = ref(null)  // { fromNodeId, fromPortId, fromKind, mouseX, mouseY }
+
+// ---- Connected ports set (for visual indicator) ----
+const connectedPorts = computed(() => {
+  const set = new Set()
+  for (const edge of props.edges) {
+    set.add(`${edge.from_node_id}:${edge.from_port_id}`)
+    set.add(`${edge.to_node_id}:${edge.to_port_id}`)
+  }
+  return set
+})
+
+// ---- Port interactions ----
+function onPortMouseDown({ port, event }) {
+  // Only start edge drag from output ports
+  if (port.kind === 'data-out' || port.kind === 'control-out') {
+    const nodeId = event.target.dataset.nodeId
+    const worldPos = screenToWorld(event.clientX, event.clientY)
+    edgeDrag.value = {
+      fromNodeId: nodeId,
+      fromPortId: port.id,
+      fromKind: port.kind,
+      mouseX: worldPos.x,
+      mouseY: worldPos.y,
+    }
+    event.preventDefault()
+  }
+}
+
+function onPortMouseUp({ port, event }) {
+  if (!edgeDrag.value) return
+  // Only accept on input ports of matching type
+  const targetNodeId = event.target.dataset.nodeId
+  const isDataEdge = edgeDrag.value.fromKind === 'data-out' && port.kind === 'data-in'
+  const isControlEdge = edgeDrag.value.fromKind === 'control-out' && port.kind === 'control-in'
+
+  if ((isDataEdge || isControlEdge) && targetNodeId !== edgeDrag.value.fromNodeId) {
+    emit('create-edge', {
+      from_node_id: edgeDrag.value.fromNodeId,
+      from_port_id: edgeDrag.value.fromPortId,
+      to_node_id: targetNodeId,
+      to_port_id: port.id,
+      edge_type: getEdgeType(edgeDrag.value.fromKind),
+    })
+  }
+  edgeDrag.value = null
+}
+
+function onCanvasMouseMove(e) {
+  if (edgeDrag.value) {
+    const worldPos = screenToWorld(e.clientX, e.clientY)
+    edgeDrag.value = { ...edgeDrag.value, mouseX: worldPos.x, mouseY: worldPos.y }
+  }
+}
+
+function onEdgeDragEnd(e) {
+  if (!edgeDrag.value) return
+  // Find port element under cursor by temporarily hiding the overlay
+  const overlay = e.target
+  overlay.style.pointerEvents = 'none'
+  const el = document.elementFromPoint(e.clientX, e.clientY)
+  overlay.style.pointerEvents = ''
+
+  if (el && el.dataset.portId && el.dataset.nodeId) {
+    const targetNodeId = el.dataset.nodeId
+    const targetPortId = el.dataset.portId
+    const targetPortKind = el.dataset.portKind
+
+    const isDataEdge = edgeDrag.value.fromKind === 'data-out' && targetPortKind === 'data-in'
+    const isControlEdge = edgeDrag.value.fromKind === 'control-out' && targetPortKind === 'control-in'
+
+    if ((isDataEdge || isControlEdge) && targetNodeId !== edgeDrag.value.fromNodeId) {
+      emit('create-edge', {
+        from_node_id: edgeDrag.value.fromNodeId,
+        from_port_id: edgeDrag.value.fromPortId,
+        to_node_id: targetNodeId,
+        to_port_id: targetPortId,
+        edge_type: getEdgeType(edgeDrag.value.fromKind),
+      })
+    }
+  }
+  edgeDrag.value = null
+}
+
+function onCanvasMouseUp() {
+  if (edgeDrag.value) {
+    edgeDrag.value = null
+  }
+}
 
 // ---- Coordinate conversion ----
 function screenToWorld(sx, sy) {

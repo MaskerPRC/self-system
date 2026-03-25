@@ -76,7 +76,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS canvas_nodes (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    type TEXT NOT NULL CHECK (type IN ('text','image','file','iframe','request')),
+    type TEXT NOT NULL CHECK (type IN ('text','image','file','iframe','request','text-input','number-input','button','image-viewer')),
     content TEXT NOT NULL DEFAULT '{}',
     x REAL NOT NULL DEFAULT 0,
     y REAL NOT NULL DEFAULT 0,
@@ -88,7 +88,74 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_canvas_nodes_project ON canvas_nodes(project_id);
+
+  CREATE TABLE IF NOT EXISTS canvas_edges (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    from_node_id TEXT NOT NULL REFERENCES canvas_nodes(id) ON DELETE CASCADE,
+    from_port_id TEXT NOT NULL,
+    to_node_id TEXT NOT NULL REFERENCES canvas_nodes(id) ON DELETE CASCADE,
+    to_port_id TEXT NOT NULL,
+    edge_type TEXT NOT NULL CHECK (edge_type IN ('data', 'control')),
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_canvas_edges_project ON canvas_edges(project_id);
+  CREATE INDEX IF NOT EXISTS idx_canvas_edges_from ON canvas_edges(from_node_id);
+  CREATE INDEX IF NOT EXISTS idx_canvas_edges_to ON canvas_edges(to_node_id);
 `);
+
+// ==================== 迁移：更新 canvas_nodes 类型约束 ====================
+// SQLite 不支持 ALTER CHECK，需要重建表来支持新的节点类型
+try {
+  // 检查是否需要迁移：读取表 DDL 来判断是否包含新类型
+  const tableInfo = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='canvas_nodes'`).get();
+  const needsMigration = tableInfo && tableInfo.sql && !tableInfo.sql.includes('text-input');
+  if (needsMigration) {
+    // CHECK 约束不支持新类型，需要重建表
+    console.log('[SQLite] Migrating canvas_nodes table to support new node types...');
+    // 先删除引用 canvas_nodes 的 canvas_edges 表（如果存在）
+    db.exec(`DROP TABLE IF EXISTS canvas_edges`);
+    db.exec(`
+      CREATE TABLE canvas_nodes_new (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        type TEXT NOT NULL CHECK (type IN ('text','image','file','iframe','request','text-input','number-input','button','image-viewer')),
+        content TEXT NOT NULL DEFAULT '{}',
+        x REAL NOT NULL DEFAULT 0,
+        y REAL NOT NULL DEFAULT 0,
+        width REAL NOT NULL DEFAULT 200,
+        height REAL NOT NULL DEFAULT 150,
+        z_index INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+      INSERT INTO canvas_nodes_new SELECT * FROM canvas_nodes;
+      DROP TABLE canvas_nodes;
+      ALTER TABLE canvas_nodes_new RENAME TO canvas_nodes;
+      CREATE INDEX IF NOT EXISTS idx_canvas_nodes_project ON canvas_nodes(project_id);
+    `);
+    // 重新创建 canvas_edges 表
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS canvas_edges (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        from_node_id TEXT NOT NULL REFERENCES canvas_nodes(id) ON DELETE CASCADE,
+        from_port_id TEXT NOT NULL,
+        to_node_id TEXT NOT NULL REFERENCES canvas_nodes(id) ON DELETE CASCADE,
+        to_port_id TEXT NOT NULL,
+        edge_type TEXT NOT NULL CHECK (edge_type IN ('data', 'control')),
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_canvas_edges_project ON canvas_edges(project_id);
+      CREATE INDEX IF NOT EXISTS idx_canvas_edges_from ON canvas_edges(from_node_id);
+      CREATE INDEX IF NOT EXISTS idx_canvas_edges_to ON canvas_edges(to_node_id);
+    `);
+    console.log('[SQLite] Migration complete.');
+  }
+} catch (e) {
+  console.error('[SQLite] Migration check error:', e.message);
+}
 
 // ==================== 辅助函数 ====================
 

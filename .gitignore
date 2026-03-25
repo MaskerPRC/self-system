@@ -4,3 +4,4 @@ ref
 .env
 data/local.db-shm
 data/local.db-wal
+.gitnexus
