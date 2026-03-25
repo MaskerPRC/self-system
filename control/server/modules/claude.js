@@ -280,6 +280,59 @@ ${requirement}
 8. 如需新依赖使用 pnpm。重要：不要使用需要原生编译的 npm 包（如 better-sqlite3、sharp 等），优先使用纯 JavaScript 实现的替代方案（如 sql.js、jimp 等）
 9. 修改完成后代码应能正常运行
 10. 【严禁使用 localhost 或 127.0.0.1】前端代码中调用后端 API 时，必须使用相对路径（如 fetch('/api/xxx')），严禁写 http://localhost:3001 或 http://127.0.0.1:3001。正确写法：fetch('/api/xxx')
+11. 【画布端口协议 - 必须接入】所有新建的页面都必须接入画布桥协议，使页面支持在无限画布中作为节点被编排。
+    端口类型：
+    - dataIn：接收外部数据（响应式更新，不触发执行）
+    - dataOut：输出处理结果
+    - controlIn：接收触发信号，执行动作（只有控制信号才触发执行）
+    - controlOut：发出事件信号（如完成、失败）
+
+    接入方法：在 Vue 页面 <script setup> 中引入 useCanvasBridge：
+    \`\`\`javascript
+    import { useCanvasBridge } from '@/canvas-bridge.js'
+    const bridge = useCanvasBridge({
+      manifest: {
+        ports: {
+          dataIn: [{ id: 'text', name: '输入文本', valueType: 'string' }],
+          controlIn: [{ id: 'run', name: '执行' }],
+          dataOut: [{ id: 'result', name: '处理结果', valueType: 'string' }],
+          controlOut: [{ id: 'completed', name: '完成' }, { id: 'failed', name: '失败' }],
+        }
+      },
+      onDataInput(portId, value) {
+        // 画布通过连线发来数据时，更新页面状态（不要在这里触发执行）
+        if (portId === 'text') inputText.value = value
+      },
+      onControl(portId) {
+        // 画布通过控制连线触发动作
+        if (portId === 'run') doProcess()
+      }
+    })
+    // 处理完成后输出数据和控制信号：
+    // bridge.setDataOutput('result', outputValue)
+    // bridge.emitControl('completed')
+    \`\`\`
+    端口设计规范：
+    - 页面 UI 上的可填写字段 → 映射为 dataIn 端口
+    - 页面 UI 上的主要操作按钮 → 映射为 controlIn 端口
+    - 页面的处理结果 → 映射为 dataOut 端口
+    - 完成/失败事件 → 映射为 controlOut 端口
+    - valueType 可选值：string、number、boolean、image、json、file、any
+    - 每个应用至少要有一个 controlIn 端口
+12. 【定时任务规范】如果功能涉及定时任务（setInterval/setTimeout），必须遵守：
+    - 严禁在模块顶层或导入时直接调用昂贵操作（LLM 调用、外部 API 请求等）
+    - App 后端使用 node --watch 开发模式，文件变动会频繁重启，所有定时任务必须自带启动冷却期（至少 60 秒延迟）
+    - 标准写法：setTimeout(() => { doTask(); setInterval(doTask, INTERVAL); }, 60000);
+    - 禁止写法：启动时立即执行昂贵操作，或没有冷却期的定时任务
+13. 【PWA / 移动端适配】项目已配置 PWA 支持，所有新页面必须：
+    - 使用响应式布局，确保手机屏幕正常显示
+    - 通过 document.title 设置页面标题
+    - API 请求失败时给出友好提示而非白屏
+    - 按钮和交互元素有足够的点击区域（最小 44x44px），适合手指操作
+14. 【输出格式标记】完成页面创建/修改后，在回复末尾输出以下标记供系统解析：
+    [PAGE_INFO] route: /xxx title: 页面标题 [/PAGE_INFO]
+    如果生成了文件：[FILE_INFO] path: xxx name: xxx type: xxx size: xxx [/FILE_INFO]
+    如果是纯文本回复（不涉及代码修改）：[RESPONSE] 回复内容 [/RESPONSE]
 
 **如果需要创建/修改 Skill**：
 1. 不要自己创建文件（你没有 .claude/ 目录的写入权限）

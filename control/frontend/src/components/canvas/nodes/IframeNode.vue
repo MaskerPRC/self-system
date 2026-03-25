@@ -30,6 +30,7 @@
       class="flex-1 w-full border-0 rounded-b-lg bg-white"
       :style="{ pointerEvents: isDragging ? 'none' : 'auto' }"
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+      @load="onIframeLoad"
     ></iframe>
   </div>
 </template>
@@ -51,6 +52,7 @@ const emit = defineEmits(['update-ports'])
 
 const iframeRef = ref(null)
 const bridgeConnected = ref(false)
+let pingTimer = null
 
 const appUrl = computed(() => {
   const route = props.content?.route || '/'
@@ -68,29 +70,23 @@ function refresh() {
 // ---- Bridge: postMessage communication with iframe app ----
 
 function handleMessage(event) {
-  // Only accept messages from our iframe
-  if (!iframeRef.value || event.source !== iframeRef.value.contentWindow) return
   const data = event.data
+  // Only accept messages with the canvas-app protocol marker
+  // Don't check event.source strictly — cross-origin iframes may not match
   if (!data || data.source !== 'canvas-app') return
 
   switch (data.type) {
     case 'ready':
-      // App announced itself, send ping and register ports
-      bridgeConnected.value = true
-      if (data.manifest?.ports) {
-        emit('update-ports', data.manifest.ports)
-      }
-      // Send ping to confirm connection
-      sendToIframe({ type: 'ping' })
-      // Send current input values
-      syncInputsToIframe()
-      break
-
     case 'pong':
+      // App announced itself, register ports
       bridgeConnected.value = true
+      stopPingPolling()
       if (data.manifest?.ports) {
         emit('update-ports', data.manifest.ports)
       }
+      // Send ping to confirm connection (for 'ready') and sync inputs
+      sendToIframe({ type: 'ping' })
+      syncInputsToIframe()
       break
 
     case 'data-output':
@@ -111,10 +107,44 @@ function handleMessage(event) {
 
 function sendToIframe(msg) {
   if (!iframeRef.value?.contentWindow) return
-  iframeRef.value.contentWindow.postMessage({
-    source: 'canvas-runtime',
-    ...msg,
-  }, '*')
+  try {
+    iframeRef.value.contentWindow.postMessage({
+      source: 'canvas-runtime',
+      ...msg,
+    }, '*')
+  } catch (e) {
+    // Cross-origin errors are expected sometimes
+  }
+}
+
+/**
+ * When iframe finishes loading, start polling with ping messages
+ * The iframe app may take a moment to mount its Vue components
+ */
+function onIframeLoad() {
+  if (bridgeConnected.value) return
+  startPingPolling()
+}
+
+function startPingPolling() {
+  stopPingPolling()
+  let attempts = 0
+  const maxAttempts = 10
+  pingTimer = setInterval(() => {
+    attempts++
+    if (bridgeConnected.value || attempts >= maxAttempts) {
+      stopPingPolling()
+      return
+    }
+    sendToIframe({ type: 'ping' })
+  }, 500) // Try every 500ms for up to 5 seconds
+}
+
+function stopPingPolling() {
+  if (pingTimer) {
+    clearInterval(pingTimer)
+    pingTimer = null
+  }
 }
 
 /**
@@ -178,6 +208,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('message', handleMessage)
+  stopPingPolling()
   if (stopInputWatch) stopInputWatch()
   for (const unsub of controlUnsubscribes) unsub()
 })
