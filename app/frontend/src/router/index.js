@@ -2,8 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomePage from '../views/HomePage.vue'
 
 const routes = [
-  { path: '/', name: 'home', component: HomePage },
-  { path: '/text-uppercase', name: 'TextUppercase', component: () => import('../views/TextUppercasePage.vue') }
+  { path: '/', name: 'home', component: HomePage }
   // Claude Code 会在此追加新路由
 ]
 

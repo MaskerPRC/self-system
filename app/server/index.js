@@ -70,8 +70,6 @@ app.get('/api/app/health', (req, res) => {
 // 每个功能模块放在 routes/ 目录下的独立文件中
 // Claude Code 在下方通过 import + app.use() 引入路由文件
 // --- APP ROUTES START ---
-import textUppercaseRoutes from './routes/text-uppercase.js';
-app.use(textUppercaseRoutes);
 import pwaRoutes from './routes/pwa.js';
 app.use(pwaRoutes);
 // --- APP ROUTES END ---
