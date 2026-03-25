@@ -72,8 +72,18 @@ function refresh() {
 function handleMessage(event) {
   const data = event.data
   // Only accept messages with the canvas-app protocol marker
-  // Don't check event.source strictly — cross-origin iframes may not match
   if (!data || data.source !== 'canvas-app') return
+  // Filter: only accept messages from this node's iframe
+  // 1. If message has nodeId (echoed back), it must match ours
+  // 2. If no nodeId (initial 'ready'), try matching event.source to our iframe
+  if (data.nodeId) {
+    if (data.nodeId !== props.nodeId) return
+  } else {
+    // For 'ready' messages without nodeId, check event.source when possible
+    try {
+      if (iframeRef.value?.contentWindow && event.source !== iframeRef.value.contentWindow) return
+    } catch { /* cross-origin: can't compare, allow through */ }
+  }
 
   switch (data.type) {
     case 'ready':
@@ -110,6 +120,7 @@ function sendToIframe(msg) {
   try {
     iframeRef.value.contentWindow.postMessage({
       source: 'canvas-runtime',
+      nodeId: props.nodeId,
       ...msg,
     }, '*')
   } catch (e) {

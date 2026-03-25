@@ -52,10 +52,14 @@ export function useCanvasBridge(options = {}) {
   const { manifest = {}, onDataInput, onControl } = options
   const connected = ref(false)
   const inputs = ref({})  // Reactive store of current input values
+  let assignedNodeId = null  // nodeId assigned by the canvas runtime
 
   function handleMessage(event) {
     const data = event.data
     if (!data || data.source !== 'canvas-runtime') return
+
+    // Remember the nodeId so we can echo it back in all responses
+    if (data.nodeId) assignedNodeId = data.nodeId
 
     switch (data.type) {
       case 'ping':
@@ -87,6 +91,7 @@ export function useCanvasBridge(options = {}) {
     if (!isInCanvas()) return
     window.parent.postMessage({
       source: 'canvas-app',
+      nodeId: assignedNodeId,
       ...msg,
     }, '*')
   }
