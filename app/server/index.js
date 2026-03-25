@@ -72,6 +72,8 @@ app.get('/api/app/health', (req, res) => {
 // --- APP ROUTES START ---
 import textUppercaseRoutes from './routes/text-uppercase.js';
 app.use(textUppercaseRoutes);
+import pwaRoutes from './routes/pwa.js';
+app.use(pwaRoutes);
 // --- APP ROUTES END ---
 
 // ==================== 生产模式：静态文件服务 ====================

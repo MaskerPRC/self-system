@@ -105,6 +105,23 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_canvas_edges_to ON canvas_edges(to_node_id);
 `);
 
+// ==================== 迁移：interactive_pages 添加 PWA 字段 ====================
+try {
+  const pageInfo = db.prepare(`PRAGMA table_info(interactive_pages)`).all();
+  const hasPwaName = pageInfo.some(col => col.name === 'pwa_name');
+  if (!hasPwaName) {
+    console.log('[SQLite] Migrating interactive_pages: adding PWA fields...');
+    db.exec(`
+      ALTER TABLE interactive_pages ADD COLUMN pwa_name TEXT;
+      ALTER TABLE interactive_pages ADD COLUMN pwa_icon TEXT;
+      ALTER TABLE interactive_pages ADD COLUMN pwa_theme_color TEXT;
+    `);
+    console.log('[SQLite] PWA fields migration complete.');
+  }
+} catch (e) {
+  console.error('[SQLite] PWA fields migration error:', e.message);
+}
+
 // ==================== 迁移：更新 canvas_nodes 类型约束 ====================
 // SQLite 不支持 ALTER CHECK，需要重建表来支持新的节点类型
 try {

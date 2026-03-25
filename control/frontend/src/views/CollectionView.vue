@@ -61,7 +61,7 @@
 
         <!-- Card View -->
         <div v-if="!isCompact" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          <PageCard v-for="p in pages" :key="p.id" :page="p" @open="openPage" @delete="deletePage" @preview="previewPage" @feature="toggleFeature" @togglePublic="togglePublic" />
+          <PageCard v-for="p in pages" :key="p.id" :page="p" @open="openPage" @delete="deletePage" @preview="previewPage" @feature="toggleFeature" @togglePublic="togglePublic" @pwaSettings="openPwaSettings" />
         </div>
 
         <!-- Compact List View -->
@@ -74,6 +74,9 @@
             <span class="text-xs font-mono text-ink-400 bg-surface px-2 py-0.5 rounded border border-stone-100 shrink-0 hidden sm:inline">{{ p.route_path }}</span>
             <span v-if="p.is_public" class="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">公开</span>
             <div class="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button @click.stop="openPwaSettings(p)" class="w-7 h-7 rounded-full flex items-center justify-center text-ink-400 hover:text-brand-500 transition-colors" title="PWA 设置">
+                <i class="ph ph-device-mobile text-sm"></i>
+              </button>
               <button @click.stop="toggleFeature(p)" class="w-7 h-7 rounded-full flex items-center justify-center transition-colors" :class="p.is_featured ? 'text-amber-500' : 'text-ink-400 hover:text-amber-500'" :title="p.is_featured ? '取消精选' : '设为精选'">
                 <i :class="p.is_featured ? 'ph-fill ph-star' : 'ph ph-star'" class="text-sm"></i>
               </button>
@@ -305,6 +308,75 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- PWA Settings Modal -->
+    <Teleport to="body">
+      <Transition name="drawer-backdrop">
+        <div v-if="pwaModalVisible" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100]" @click="pwaModalVisible = false"></div>
+      </Transition>
+      <Transition name="drawer">
+        <div v-if="pwaModalVisible" class="fixed inset-x-0 bottom-0 z-[101] flex flex-col bg-paper rounded-t-2xl shadow-2xl" style="max-height: 80vh;">
+          <div class="flex items-center justify-center pt-3 pb-1 cursor-grab" @click="pwaModalVisible = false">
+            <div class="w-10 h-1 bg-stone-300 rounded-full"></div>
+          </div>
+          <div class="flex items-center justify-between px-5 pb-3 border-b border-stone-200">
+            <div class="flex items-center gap-2">
+              <i class="ph ph-device-mobile text-lg text-brand-600"></i>
+              <h3 class="font-serif font-semibold text-ink-900">PWA 设置</h3>
+              <span class="text-xs font-mono text-ink-400 bg-surface px-2 py-0.5 rounded border border-stone-100">{{ pwaPage?.route_path }}</span>
+            </div>
+            <button @click="pwaModalVisible = false" class="w-8 h-8 rounded-full flex items-center justify-center text-ink-500 hover:text-ink-900 hover:bg-stone-100 transition-colors">
+              <i class="ph ph-x text-lg"></i>
+            </button>
+          </div>
+          <div class="overflow-y-auto p-5 space-y-6">
+            <!-- Icon Upload -->
+            <div>
+              <label class="text-sm font-medium text-ink-700 mb-2 block">应用图标</label>
+              <div class="flex items-center gap-4">
+                <div class="w-16 h-16 rounded-2xl bg-surface border border-stone-200 flex items-center justify-center overflow-hidden shrink-0">
+                  <img v-if="pwaForm.iconPreview" :src="pwaForm.iconPreview" class="w-full h-full object-cover" />
+                  <i v-else class="ph ph-image text-2xl text-ink-300"></i>
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="flex items-center gap-2 px-4 py-2 rounded-full bg-surface border border-stone-200 text-sm font-medium text-ink-700 hover:bg-paper hover:border-stone-300 cursor-pointer transition-colors">
+                    <i class="ph ph-upload-simple"></i>
+                    <span>上传图标</span>
+                    <input type="file" accept="image/*" class="hidden" @change="handlePwaIconUpload" />
+                  </label>
+                  <p class="text-xs text-ink-400">建议 512x512 正方形 PNG</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- App Name -->
+            <div>
+              <label class="text-sm font-medium text-ink-700 mb-2 block">应用名称</label>
+              <input v-model="pwaForm.name" type="text" placeholder="安装后显示的名称" class="w-full px-3 py-2 text-sm border border-stone-200 rounded-xl outline-none focus:border-brand-400 transition-colors" />
+            </div>
+
+            <!-- Theme Color -->
+            <div>
+              <label class="text-sm font-medium text-ink-700 mb-2 block">主题色</label>
+              <div class="flex items-center gap-3">
+                <input v-model="pwaForm.themeColor" type="color" class="w-10 h-10 rounded-xl border border-stone-200 cursor-pointer p-0.5" />
+                <input v-model="pwaForm.themeColor" type="text" placeholder="#667eea" class="flex-1 px-3 py-2 text-sm border border-stone-200 rounded-xl outline-none focus:border-brand-400 font-mono transition-colors" />
+              </div>
+            </div>
+
+            <!-- Save Button -->
+            <div class="flex gap-3 pt-2">
+              <button @click="savePwaSettings" :disabled="pwaSaving" class="flex-1 py-2.5 bg-ink-900 text-white text-sm font-medium rounded-xl hover:bg-ink-800 transition-colors disabled:opacity-50">
+                {{ pwaSaving ? '保存中...' : '保存设置' }}
+              </button>
+              <button v-if="pwaForm.iconPreview" @click="removePwaIcon" class="px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 rounded-xl hover:bg-red-100 transition-colors">
+                移除图标
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -493,6 +565,75 @@ function toggleDebug() {
   if (iframeRef.value) {
     iframeLoading.value = true
     iframeRef.value.src = previewUrl.value
+  }
+}
+
+// ---- PWA Settings ----
+const pwaModalVisible = ref(false)
+const pwaPage = ref(null)
+const pwaSaving = ref(false)
+const pwaForm = ref({ name: '', themeColor: '#667eea', iconPreview: '' })
+const pwaIconFile = ref(null)
+
+async function openPwaSettings(page) {
+  pwaPage.value = page
+  pwaForm.value = {
+    name: page.pwa_name || page.title || '',
+    themeColor: page.pwa_theme_color || '#667eea',
+    iconPreview: page.pwa_icon ? `${appBaseUrl.value}${page.pwa_icon}` : ''
+  }
+  pwaIconFile.value = null
+  pwaModalVisible.value = true
+}
+
+function handlePwaIconUpload(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  pwaIconFile.value = file
+  pwaForm.value.iconPreview = URL.createObjectURL(file)
+  e.target.value = ''
+}
+
+async function savePwaSettings() {
+  if (!pwaPage.value) return
+  pwaSaving.value = true
+  try {
+    // 上传图标
+    if (pwaIconFile.value) {
+      const form = new FormData()
+      form.append('icon', pwaIconFile.value)
+      await fetch(`${API}/api/pages/${pwaPage.value.id}/pwa-icon`, { method: 'POST', body: form })
+      pwaIconFile.value = null
+    }
+
+    // 保存名称和主题色
+    await fetch(`${API}/api/pages/${pwaPage.value.id}/pwa`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pwa_name: pwaForm.value.name,
+        pwa_theme_color: pwaForm.value.themeColor
+      })
+    })
+
+    pwaModalVisible.value = false
+    fetchPages()
+  } catch {
+    alert('保存失败')
+  } finally {
+    pwaSaving.value = false
+  }
+}
+
+async function removePwaIcon() {
+  if (!pwaPage.value) return
+  try {
+    await fetch(`${API}/api/pages/${pwaPage.value.id}/pwa-icon`, { method: 'DELETE' })
+    pwaForm.value.iconPreview = ''
+    pwaIconFile.value = null
+    fetchPages()
+  } catch {
+    alert('移除失败')
   }
 }
 

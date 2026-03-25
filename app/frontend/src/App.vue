@@ -51,10 +51,36 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
+
+// 动态 PWA Manifest：根据路由切换 manifest，使每个页面可以有独立的 PWA 图标和名称
+function updateManifest(routePath) {
+  const link = document.getElementById('pwa-manifest')
+  if (link) {
+    link.href = `/api/pwa/manifest.json?route=${encodeURIComponent(routePath)}`
+  }
+  // 同步更新 apple-touch-icon
+  fetch(`/api/pwa/manifest.json?route=${encodeURIComponent(routePath)}`)
+    .then(r => r.json())
+    .then(manifest => {
+      const appleIcon = document.querySelector('link[rel="apple-touch-icon"]')
+      if (appleIcon && manifest.icons?.[0]?.src) {
+        appleIcon.href = manifest.icons[0].src
+      }
+      const themeColor = document.querySelector('meta[name="theme-color"]')
+      if (themeColor && manifest.theme_color) {
+        themeColor.content = manifest.theme_color
+      }
+    })
+    .catch(() => {})
+}
+
+watch(() => route.path, (newPath) => {
+  updateManifest(newPath)
+}, { immediate: true })
 const authLoading = ref(true)
 const needLogin = ref(false)
 const isPublicPage = ref(false)

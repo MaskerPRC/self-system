@@ -19,6 +19,9 @@
         <button @click.stop="$emit('feature', page)" class="w-8 h-8 rounded-full flex items-center justify-center transition-colors" :class="page.is_featured ? 'text-amber-500 hover:text-amber-600 bg-amber-50' : 'text-ink-400 hover:text-amber-500 hover:bg-amber-50 opacity-0 group-hover:opacity-100'" :title="page.is_featured ? '取消精选' : '设为精选'">
           <i :class="page.is_featured ? 'ph-fill ph-star' : 'ph ph-star'"></i>
         </button>
+        <button @click.stop="$emit('pwaSettings', page)" class="w-8 h-8 rounded-full flex items-center justify-center text-ink-400 hover:text-brand-500 hover:bg-brand-50 transition-colors opacity-0 group-hover:opacity-100" title="PWA 设置">
+          <i class="ph ph-device-mobile"></i>
+        </button>
         <button @click.stop="$emit('delete', page.id)" class="w-8 h-8 rounded-full flex items-center justify-center text-ink-400 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100" title="删除">
           <i class="ph ph-trash"></i>
         </button>
@@ -37,7 +40,7 @@
 import { computed } from 'vue'
 
 const props = defineProps({ page: Object })
-defineEmits(['open', 'delete', 'preview', 'feature', 'togglePublic'])
+defineEmits(['open', 'delete', 'preview', 'feature', 'togglePublic', 'pwaSettings'])
 
 const statusDotClass = computed(() => {
   if (props.page.status === 'active') return 'bg-emerald-500'
