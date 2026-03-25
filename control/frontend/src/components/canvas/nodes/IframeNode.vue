@@ -88,14 +88,21 @@ function handleMessage(event) {
   switch (data.type) {
     case 'ready':
     case 'pong':
-      // App announced itself, register ports
       bridgeConnected.value = true
       stopPingPolling()
+      // Only emit update-ports if ports actually changed
       if (data.manifest?.ports) {
-        emit('update-ports', data.manifest.ports)
+        const newPorts = JSON.stringify(data.manifest.ports)
+        const oldPorts = JSON.stringify(props.content?.ports)
+        if (newPorts !== oldPorts) {
+          emit('update-ports', data.manifest.ports)
+        }
       }
-      // Send ping to confirm connection (for 'ready') and sync inputs
-      sendToIframe({ type: 'ping' })
+      // Only send ping in response to 'ready' (initial handshake)
+      // Do NOT ping back on 'pong' — that creates an infinite loop
+      if (data.type === 'ready') {
+        sendToIframe({ type: 'ping' })
+      }
       syncInputsToIframe()
       break
 
