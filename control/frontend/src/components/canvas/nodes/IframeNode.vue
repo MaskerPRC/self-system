@@ -178,6 +178,7 @@ function syncInputsToIframe() {
   }
 }
 
+let stopInputWatch = null
 let controlUnsubscribes = []
 
 function subscribeControlPorts() {
@@ -208,6 +209,18 @@ onMounted(() => {
   window.addEventListener('message', handleMessage)
 
   if (props.runtime && props.nodeId) {
+    // Watch data input changes → push to iframe in real-time
+    stopInputWatch = watch(
+      () => props.runtime.nodeStates[props.nodeId]?.inputs,
+      (inputs) => {
+        if (!inputs || !bridgeConnected.value) return
+        for (const [portId, value] of Object.entries(inputs)) {
+          sendToIframe({ type: 'set-data-input', portId, value })
+        }
+      },
+      { deep: true }
+    )
+
     subscribeControlPorts()
   }
 })
@@ -215,6 +228,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('message', handleMessage)
   stopPingPolling()
+  if (stopInputWatch) stopInputWatch()
   for (const unsub of controlUnsubscribes) unsub()
 })
 </script>
