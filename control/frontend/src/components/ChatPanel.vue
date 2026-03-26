@@ -43,6 +43,36 @@
         <!-- User message -->
         <div v-else-if="m.role === 'user'" class="flex justify-end animate-fade-in-up">
           <div class="max-w-[85%] sm:max-w-[70%] bg-surface border border-stone-200 text-ink-900 px-6 py-4 rounded-3xl rounded-tr-md shadow-sm">
+            <!-- Canvas context cards -->
+            <div v-if="getCanvasContext(m.attachments).length" class="flex flex-wrap gap-1.5 mb-2">
+              <template v-for="(ctx, i) in getCanvasContext(m.attachments)" :key="'ctx-' + i">
+                <span v-if="ctx.type === 'canvas_app'"
+                  class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium bg-brand-50 text-brand-600 border border-brand-100">
+                  <i class="ph ph-browser text-xs"></i>
+                  {{ ctx.title || ctx.route }}
+                </span>
+                <span v-else-if="ctx.type === 'canvas_image'"
+                  class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium bg-violet-50 text-violet-600 border border-violet-100">
+                  <i class="ph ph-image text-xs"></i>
+                  {{ ctx.name }}
+                </span>
+                <span v-else-if="ctx.type === 'canvas_file'"
+                  class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium bg-stone-100 text-ink-600 border border-stone-200">
+                  <i class="ph ph-file text-xs"></i>
+                  {{ ctx.name }}
+                </span>
+                <span v-else-if="ctx.type === 'canvas_text'"
+                  class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium bg-stone-100 text-ink-500 border border-stone-200">
+                  <i class="ph ph-text-aa text-xs"></i>
+                  文本片段
+                </span>
+                <span v-else-if="ctx.type === 'canvas_request'"
+                  class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium bg-stone-100 text-ink-500 border border-stone-200">
+                  <i class="ph ph-lightning text-xs"></i>
+                  {{ (ctx.prompt || '').slice(0, 20) }}...
+                </span>
+              </template>
+            </div>
             <!-- @ 提及的 apps 和 skills -->
             <div v-if="getMentions(m.attachments).length" class="flex flex-wrap gap-1.5 mb-2">
               <span v-for="mention in getMentions(m.attachments)" :key="mention.type + '-' + (mention.id || mention.name)"
@@ -417,14 +447,22 @@ const filteredMentionItems = computed(() => {
   return items
 })
 
+const canvasTypes = ['canvas_app', 'canvas_image', 'canvas_file', 'canvas_text', 'canvas_request']
+const specialTypes = ['page_created', 'skill_created', 'mention_app', 'mention_skill', ...canvasTypes]
+
 function getFileAttachments(attachments) {
   if (!attachments) return []
-  return attachments.filter(a => a.type !== 'page_created' && a.type !== 'skill_created' && a.type !== 'mention_app' && a.type !== 'mention_skill')
+  return attachments.filter(a => !specialTypes.includes(a.type))
 }
 
 function getMentions(attachments) {
   if (!attachments) return []
   return attachments.filter(a => a.type === 'mention_app' || a.type === 'mention_skill')
+}
+
+function getCanvasContext(attachments) {
+  if (!attachments) return []
+  return attachments.filter(a => canvasTypes.includes(a.type))
 }
 
 function openFileDrawer(msgId) {

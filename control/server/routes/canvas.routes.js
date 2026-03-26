@@ -402,25 +402,26 @@ router.post('/api/projects/:id/request', async (req, res) => {
         .filter(Boolean);
     }
 
-    // 2. 构建上下文字符串和附件列表
+    // 2. 构建上下文字符串（给 Claude）和用户消息附件（给 UI 展示）
     const contextParts = [];
-    const attachments = [];
+    const attachments = [];       // 文件附件，给 Claude 读取
+    const msgAttachments = [];    // 消息附件，给 ChatPanel 展示
 
     for (const node of contextNodes) {
       const content = node.content || {};
       switch (node.type) {
         case 'text':
-          if (content.text) contextParts.push(content.text);
+          if (content.text) {
+            contextParts.push(content.text);
+            msgAttachments.push({ type: 'canvas_text', text: content.text });
+          }
           break;
         case 'image': {
           const imgName = content.originalName || content.name || 'image';
           contextParts.push(`[Image: ${imgName}]`);
-          // Add actual file as attachment so Claude can read it
+          msgAttachments.push({ type: 'canvas_image', name: imgName, src: content.src });
           if (content.src) {
-            // content.src is like /api/canvas/files/{projectId}/{filename}
-            // Resolve to actual file path
-            const urlPath = content.src;
-            const match = urlPath.match(/\/api\/canvas\/files\/([^/]+)\/(.+)/);
+            const match = content.src.match(/\/api\/canvas\/files\/([^/]+)\/(.+)/);
             if (match) {
               const filePath = pathResolve(__dirname, '../../../data/canvas', match[1], match[2]);
               if (existsSync(filePath)) {
@@ -433,6 +434,7 @@ router.post('/api/projects/:id/request', async (req, res) => {
         case 'file': {
           const fileName = content.name || 'file';
           contextParts.push(`[File: ${fileName}]`);
+          msgAttachments.push({ type: 'canvas_file', name: fileName, url: content.url });
           if (content.url) {
             const match = content.url.match(/\/api\/canvas\/files\/([^/]+)\/(.+)/);
             if (match) {
@@ -446,9 +448,11 @@ router.post('/api/projects/:id/request', async (req, res) => {
         }
         case 'iframe':
           contextParts.push(`[App Page: ${content.route || content.url || 'unknown'}]`);
+          msgAttachments.push({ type: 'canvas_app', title: content.title || content.route, route: content.route });
           break;
         case 'request':
           contextParts.push(`[Previous request: ${content.prompt || ''}]`);
+          msgAttachments.push({ type: 'canvas_request', prompt: content.prompt });
           break;
       }
     }
@@ -467,10 +471,16 @@ router.post('/api/projects/:id/request', async (req, res) => {
 
     const conversationId = conversation.id;
 
-    // 4. 保存用户消息
+    // 4. 保存用户消息（content 只存用户原始请求，画布上下文存为 attachments）
+    const userMsgData = {
+      conversation_id: conversationId,
+      role: 'user',
+      content: prompt.trim(),
+      attachments: msgAttachments.length > 0 ? msgAttachments : null,
+    };
     const { error: msgError } = await supabase
       .from('messages')
-      .insert({ conversation_id: conversationId, role: 'user', content: contextString });
+      .insert(userMsgData);
     if (msgError) throw msgError;
 
     // 5. 创建 request 类型的 canvas 节点

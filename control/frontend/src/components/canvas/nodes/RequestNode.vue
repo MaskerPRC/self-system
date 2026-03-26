@@ -21,10 +21,24 @@
         <i class="ph ph-clock text-ink-400 text-base"></i>
         <span class="text-xs font-medium text-ink-500">等待中</span>
       </div>
+      <!-- TODO progress counter -->
+      <span v-if="todoItems.length && content?.status === 'processing'" class="text-xs text-ink-400 ml-auto">
+        {{ todoItems.filter(t => t.done).length }}/{{ todoItems.length }}
+      </span>
     </div>
 
-    <!-- Prompt text -->
-    <div class="flex-1 min-h-0">
+    <!-- TODO progress list (only during processing) -->
+    <div v-if="todoItems.length && content?.status === 'processing'" class="flex-1 min-h-0 overflow-y-auto space-y-0.5">
+      <div v-for="(item, i) in todoItems" :key="i"
+        class="flex items-start gap-1.5 py-0.5"
+        :class="item.done ? 'text-ink-300' : 'text-ink-700'">
+        <i :class="item.done ? 'ph-fill ph-check-circle text-brand-400' : 'ph ph-circle-dashed text-ink-300 animate-pulse'" class="text-xs mt-0.5 shrink-0"></i>
+        <span class="text-xs leading-snug" :class="item.done ? 'line-through' : ''">{{ item.text }}</span>
+      </div>
+    </div>
+
+    <!-- Prompt text (when no TODO or not processing) -->
+    <div v-else class="flex-1 min-h-0">
       <p class="text-sm text-ink-700 line-clamp-3 leading-relaxed">{{ content?.prompt || '无内容' }}</p>
     </div>
 
@@ -48,7 +62,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -65,6 +79,54 @@ const borderClass = computed(() => {
     default: return 'border-stone-200'
   }
 })
+
+// ---- TODO polling ----
+
+const todoContent = ref(null)
+let todoTimer = null
+
+const todoItems = computed(() => {
+  if (!todoContent.value) return []
+  return todoContent.value.split('\n')
+    .map(line => line.trim())
+    .filter(line => /^(-\s*)?\[[ xX]\]/.test(line))
+    .map(line => ({
+      done: /^(-\s*)?\[[xX]\]/.test(line),
+      text: line.replace(/^(-\s*)?\[[ xX]\]\s*/, '')
+    }))
+})
+
+async function fetchTodo() {
+  const convId = props.content?.conversationId
+  if (!convId) return
+  try {
+    const r = await fetch(`/api/conversations/${convId}/todo`)
+    const d = await r.json()
+    todoContent.value = d.content || null
+  } catch {
+    todoContent.value = null
+  }
+}
+
+function startTodoPoll() {
+  stopTodoPoll()
+  fetchTodo()
+  todoTimer = setInterval(fetchTodo, 3000)
+}
+
+function stopTodoPoll() {
+  if (todoTimer) { clearInterval(todoTimer); todoTimer = null }
+  todoContent.value = null
+}
+
+watch(() => props.content?.status, (val, oldVal) => {
+  if (val === 'processing') startTodoPoll()
+  else stopTodoPoll()
+}, { immediate: true })
+
+onUnmounted(() => { stopTodoPoll() })
+
+// ---- Navigation ----
 
 function goToConversation() {
   if (props.content?.conversationId) {
