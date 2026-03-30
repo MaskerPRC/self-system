@@ -174,6 +174,19 @@ try {
   console.error('[SQLite] Migration check error:', e.message);
 }
 
+// ==================== 迁移：messages 添加 raw_output 字段 ====================
+try {
+  const msgInfo = db.prepare(`PRAGMA table_info(messages)`).all();
+  const hasRawOutput = msgInfo.some(col => col.name === 'raw_output');
+  if (!hasRawOutput) {
+    console.log('[SQLite] Migrating messages: adding raw_output field...');
+    db.exec(`ALTER TABLE messages ADD COLUMN raw_output TEXT`);
+    console.log('[SQLite] raw_output field migration complete.');
+  }
+} catch (e) {
+  console.error('[SQLite] raw_output migration error:', e.message);
+}
+
 // ==================== 辅助函数 ====================
 
 /** 解析 Supabase 风格的 select 字符串，检测关联查询 */

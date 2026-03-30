@@ -121,6 +121,19 @@
             <span class="text-sm font-serif font-semibold text-ink-900 mb-1">Claude</span>
             <div v-if="m.content" class="text-ink-800 text-[15px] leading-relaxed break-words prose-chat" v-html="renderMd(m.content)">
             </div>
+            <!-- Raw output collapsible -->
+            <div v-if="m.raw_output && m.raw_output !== m.content" class="mt-2">
+              <button @click="toggleRawOutput(m.id)"
+                class="flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-600 transition-colors py-1">
+                <i :class="expandedRawOutputs.has(m.id) ? 'ph ph-caret-down' : 'ph ph-caret-right'" class="text-[10px]"></i>
+                <i class="ph ph-code text-sm"></i>
+                <span>原始输出</span>
+              </button>
+              <div v-if="expandedRawOutputs.has(m.id)"
+                class="mt-1.5 bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-[13px] text-ink-600 leading-relaxed break-words prose-chat max-h-[400px] overflow-y-auto"
+                v-html="renderMd(m.raw_output)">
+              </div>
+            </div>
             <!-- File attachments -->
             <div v-if="m.attachments && m.attachments.length" class="mt-3 flex flex-col gap-3">
               <!-- Creation cards (page/skill) -->
@@ -415,6 +428,14 @@ const pasteInputRef = ref(null)
 const pasteZoneText = ref('')
 const todoCollapsed = ref(false)
 const fileDrawerMsgId = ref(null)
+const expandedRawOutputs = ref(new Set())
+
+function toggleRawOutput(msgId) {
+  const s = new Set(expandedRawOutputs.value)
+  if (s.has(msgId)) s.delete(msgId)
+  else s.add(msgId)
+  expandedRawOutputs.value = s
+}
 
 // @mention 功能
 const selectedApps = ref([])

@@ -697,7 +697,7 @@ router.post('/api/projects/:id/request', async (req, res) => {
         if (pageInfos) pageInfos.forEach(p => allAttachments.push({ type: 'page_created', name: p.title, route: p.routePath }));
         if (skillInfos) skillInfos.forEach(s => allAttachments.push({ type: 'skill_created', name: s.name, description: s.description }));
 
-        const assistantInsert = { conversation_id: conversationId, role: 'assistant', content: reply };
+        const assistantInsert = { conversation_id: conversationId, role: 'assistant', content: reply, raw_output: result.stdout };
         if (allAttachments.length > 0) assistantInsert.attachments = allAttachments;
         await supabase.from('messages').insert(assistantInsert);
 
