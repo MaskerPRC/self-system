@@ -274,10 +274,9 @@
             @input="onInput"
             @paste="onPaste"
             @focus="onMainInputFocus"
-            :disabled="isProcessing"
             rows="1"
-            class="w-full bg-transparent border-0 outline-none resize-none py-4 pl-14 pr-14 text-ink-900 placeholder-ink-400 max-h-[160px] disabled:opacity-50 disabled:cursor-not-allowed leading-relaxed"
-            placeholder="输入需求... 输入 @ 选择页面或 Skill"
+            class="w-full bg-transparent border-0 outline-none resize-none py-4 pl-14 pr-14 text-ink-900 placeholder-ink-400 max-h-[160px] leading-relaxed"
+            :placeholder="isProcessing ? '输入需求加入队列... 输入 @ 选择页面或 Skill' : '输入需求... 输入 @ 选择页面或 Skill'"
           ></textarea>
 
           <!-- @mention dropdown -->
