@@ -109,7 +109,6 @@ async function processMessage({ conversationId, messageId, requestId, msgContent
 
   try {
     markProcessing(conversationId);
-    markConversationProcessing(conversationId);
     broadcast({ type: 'processing', conversationId, requestId, message: '正在处理需求...' });
 
     // 获取对话历史（排除当前消息，取最近 20 条作为上下文）
@@ -224,7 +223,6 @@ async function processMessage({ conversationId, messageId, requestId, msgContent
       await supabase.from('messages').insert(insertData);
 
       clearProcessing(conversationId);
-      clearConversationProcessing(conversationId);
       broadcast({ type: 'completed', conversationId, requestId, message: '完成', skill: skillInfos });
       return;
     }
@@ -303,7 +301,6 @@ async function processMessage({ conversationId, messageId, requestId, msgContent
     await supabase.from('messages').insert(assistantInsert);
 
     clearProcessing(conversationId);
-    clearConversationProcessing(conversationId);
     broadcast({ type: 'completed', conversationId, requestId, message: '完成', pages: pageInfos, skill: skillInfos });
   } catch (error) {
     console.error('[Server] Claude Code 失败:', error);
@@ -314,7 +311,6 @@ async function processMessage({ conversationId, messageId, requestId, msgContent
       .insert({ conversation_id: conversationId, role: 'system', content: `失败: ${error.message}` });
 
     clearProcessing(conversationId);
-    clearConversationProcessing(conversationId);
     broadcast({ type: 'error', conversationId, requestId, message: error.message });
   }
 }
@@ -325,13 +321,18 @@ function processNextInConversationQueue(conversationId) {
   if (abortedConversations.has(conversationId)) {
     abortedConversations.delete(conversationId);
     clearQueued(conversationId);
+    clearConversationProcessing(conversationId);
     // 清空该对话的所有排队消息
     while (shiftConversationQueue(conversationId)) {}
     return;
   }
 
   const next = shiftConversationQueue(conversationId);
-  if (!next) return;
+  if (!next) {
+    // 没有更多排队消息，清除对话忙碌状态
+    clearConversationProcessing(conversationId);
+    return;
+  }
 
   // 广播该消息离开队列
   broadcast({ type: 'message_dequeued', conversationId, messageId: next.messageId });
@@ -414,6 +415,9 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
       return;
     }
 
+    // 立即标记对话为忙碌，防止后续请求绕过队列
+    markConversationProcessing(conversationId);
+
     // 广播排队状态（全局队列中有任务时标记为排队，否则直接进入处理）
     if (requestQueue.size > 0 || requestQueue.pending > 0) {
       markQueued(conversationId);
@@ -426,6 +430,7 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
       if (abortedConversations.has(conversationId)) {
         abortedConversations.delete(conversationId);
         clearQueued(conversationId);
+        clearConversationProcessing(conversationId);
         return;
       }
 

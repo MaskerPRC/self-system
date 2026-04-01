@@ -411,7 +411,9 @@ function connectWs() {
         fetchConvs()
         return
       }
-      isProcessing.value = false
+      // 如果该对话还有排队消息，保持 processing 状态（下一条即将开始）
+      const hasMore = conversationQueuedMsgs.value.has(data.conversationId) && conversationQueuedMsgs.value.get(data.conversationId).size > 0
+      isProcessing.value = hasMore
       fetchMessages(activeId.value)
       fetchConvs()
     } else if (data.type === 'error') {
@@ -423,7 +425,9 @@ function connectWs() {
         }
       }
       if (data.conversationId && data.conversationId !== activeId.value) return
-      isProcessing.value = false
+      // 如果还有排队消息，保持 processing 状态
+      const hasMoreAfterError = conversationQueuedMsgs.value.has(data.conversationId) && conversationQueuedMsgs.value.get(data.conversationId).size > 0
+      isProcessing.value = hasMoreAfterError
       messages.value.push({
         id: 'err-' + Date.now(), role: 'system',
         content: data.message || '出错', created_at: new Date().toISOString()
