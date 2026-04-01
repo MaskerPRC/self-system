@@ -106,6 +106,7 @@ router.get('/api/conversations/:id/messages', async (req, res) => {
 // ========== 处理单条消息的核心函数（提取出来以便对话队列复用） ==========
 async function processMessage({ conversationId, messageId, requestId, msgContent, attachments, targetApps, targetSkills, hasAttachments, content }) {
   const supabase = getSupabase();
+  console.log(`[Queue] processMessage 开始: conv=${conversationId}, msg=${messageId}`);
 
   try {
     markProcessing(conversationId);
@@ -221,6 +222,7 @@ async function processMessage({ conversationId, messageId, requestId, msgContent
       if (responseAttachments.length > 0) insertData.attachments = responseAttachments;
 
       await supabase.from('messages').insert(insertData);
+      console.log(`[Queue] 简单回复已保存: conv=${conversationId}`);
 
       clearProcessing(conversationId);
       broadcast({ type: 'completed', conversationId, requestId, message: '完成', skill: skillInfos });
@@ -303,16 +305,20 @@ async function processMessage({ conversationId, messageId, requestId, msgContent
     clearProcessing(conversationId);
     broadcast({ type: 'completed', conversationId, requestId, message: '完成', pages: pageInfos, skill: skillInfos });
   } catch (error) {
-    console.error('[Server] Claude Code 失败:', error);
+    console.error(`[Server] Claude Code 失败 (conv=${conversationId}):`, error);
 
-    const supabase = getSupabase();
-    await supabase
-      .from('messages')
-      .insert({ conversation_id: conversationId, role: 'system', content: `失败: ${error.message}` });
+    try {
+      await supabase
+        .from('messages')
+        .insert({ conversation_id: conversationId, role: 'system', content: `失败: ${error.message}` });
+    } catch (dbErr) {
+      console.error('[Server] 保存错误消息失败:', dbErr);
+    }
 
     clearProcessing(conversationId);
     broadcast({ type: 'error', conversationId, requestId, message: error.message });
   }
+  console.log(`[Queue] processMessage 结束: conv=${conversationId}, msg=${messageId}`);
 }
 
 // 处理完一条消息后，检查对话队列中的下一条消息
@@ -338,14 +344,21 @@ function processNextInConversationQueue(conversationId) {
   broadcast({ type: 'message_dequeued', conversationId, messageId: next.messageId });
 
   requestQueue.add(async () => {
-    if (abortedConversations.has(conversationId)) {
-      abortedConversations.delete(conversationId);
-      clearQueued(conversationId);
-      while (shiftConversationQueue(conversationId)) {}
-      return;
-    }
+    try {
+      if (abortedConversations.has(conversationId)) {
+        abortedConversations.delete(conversationId);
+        clearQueued(conversationId);
+        clearConversationProcessing(conversationId);
+        while (shiftConversationQueue(conversationId)) {}
+        return;
+      }
 
-    await processMessage(next.payload);
+      await processMessage(next.payload);
+    } catch (err) {
+      console.error(`[Queue] 队列消息处理异常 (conv=${conversationId}):`, err);
+      clearProcessing(conversationId);
+      broadcast({ type: 'error', conversationId, requestId: next.requestId, message: err.message });
+    }
     processNextInConversationQueue(conversationId);
   });
 }
@@ -411,12 +424,14 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
         requestId,
         payload: messagePayload
       });
+      console.log(`[Queue] 消息加入对话队列: conv=${conversationId}, msg=${userMsg.id}, pos=${queuePos}`);
       broadcast({ type: 'message_queued', conversationId, messageId: userMsg.id, queuePosition: queuePos });
       return;
     }
 
     // 立即标记对话为忙碌，防止后续请求绕过队列
     markConversationProcessing(conversationId);
+    console.log(`[Queue] 消息直接进入处理: conv=${conversationId}, msg=${userMsg.id}, queueSize=${requestQueue.size}, queuePending=${requestQueue.pending}`);
 
     // 广播排队状态（全局队列中有任务时标记为排队，否则直接进入处理）
     if (requestQueue.size > 0 || requestQueue.pending > 0) {
@@ -426,15 +441,21 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
 
     // 异步执行 Claude Code
     requestQueue.add(async () => {
-      // 检查是否已被用户中断
-      if (abortedConversations.has(conversationId)) {
-        abortedConversations.delete(conversationId);
-        clearQueued(conversationId);
-        clearConversationProcessing(conversationId);
-        return;
-      }
+      try {
+        // 检查是否已被用户中断
+        if (abortedConversations.has(conversationId)) {
+          abortedConversations.delete(conversationId);
+          clearQueued(conversationId);
+          clearConversationProcessing(conversationId);
+          return;
+        }
 
-      await processMessage(messagePayload);
+        await processMessage(messagePayload);
+      } catch (err) {
+        console.error(`[Queue] requestQueue 回调异常 (conv=${conversationId}):`, err);
+        clearProcessing(conversationId);
+        broadcast({ type: 'error', conversationId, requestId, message: err.message });
+      }
       // 处理完后检查该对话是否有排队的下一条消息
       processNextInConversationQueue(conversationId);
     });
