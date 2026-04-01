@@ -10,7 +10,7 @@ import { callClaudeCode, verifyAndFixApp, abortClaude } from '../modules/claude.
 import { restartAppProject, getAppStatus, getAppLogs } from '../modules/process.js';
 import { commitChanges } from '../modules/git.js';
 import { broadcast, markProcessing, clearProcessing, markQueued, clearQueued, getProcessingList, getQueuedList } from '../modules/websocket.js';
-import { requestQueue, abortedConversations } from '../modules/queue.js';
+import { requestQueue, abortedConversations, addToConversationQueue, removeFromConversationQueue, getConversationQueue, shiftConversationQueue, markConversationProcessing, clearConversationProcessing, isConversationBusy } from '../modules/queue.js';
 import { extractNaturalText, extractResponse, extractFileInfo, extractAndSaveSkill, extractPageInfo, parseRoutePaths } from '../helpers/output-parser.js';
 import { extractStructuredOutput, isOpenRouterConfigured } from '../modules/openrouter.js';
 import { collectAllFiles, scanNewFiles, mergeFileAttachments, rescueMisplacedFiles, verifyAppAfterChange } from '../helpers/file-utils.js';
@@ -103,6 +103,252 @@ router.get('/api/conversations/:id/messages', async (req, res) => {
   }
 });
 
+// ========== 处理单条消息的核心函数（提取出来以便对话队列复用） ==========
+async function processMessage({ conversationId, messageId, requestId, msgContent, attachments, targetApps, targetSkills, hasAttachments, content }) {
+  const supabase = getSupabase();
+
+  try {
+    markProcessing(conversationId);
+    markConversationProcessing(conversationId);
+    broadcast({ type: 'processing', conversationId, requestId, message: '正在处理需求...' });
+
+    // 获取对话历史（排除当前消息，取最近 20 条作为上下文）
+    let history = [];
+    try {
+      const { data: historyData } = await supabase
+        .from('messages')
+        .select('role, content')
+        .eq('conversation_id', conversationId)
+        .neq('id', messageId)
+        .order('created_at', { ascending: true });
+      if (historyData) {
+        history = historyData.filter(m => m.role !== 'system').slice(-20);
+      }
+    } catch {}
+
+    // 首条消息时自动生成对话标题
+    if (history.length === 0) {
+      const titleSource = msgContent || (hasAttachments ? `上传了 ${attachments?.length || 0} 个文件` : '新对话');
+      const autoTitle = titleSource.slice(0, 30) + (titleSource.length > 30 ? '...' : '');
+      try {
+        await supabase
+          .from('conversations')
+          .update({ title: autoTitle, updated_at: new Date().toISOString() })
+          .eq('id', conversationId);
+        broadcast({ type: 'title_updated', conversationId, title: autoTitle });
+      } catch {}
+    }
+
+    // 记录 Claude 执行前 temp 目录中已有的文件（递归，用于后续检测新生成的文件）
+    const tempDir = pathResolve(__dirname, '../../../app/temp', conversationId);
+    const tempRootDir = pathResolve(__dirname, '../../../app/temp');
+    let existingTempFiles = new Map();
+    let existingTempRootFiles = new Set();
+    try {
+      if (existsSync(tempDir)) existingTempFiles = collectAllFiles(tempDir);
+    } catch {}
+    try {
+      if (existsSync(tempRootDir)) existingTempRootFiles = new Set(readdirSync(tempRootDir));
+    } catch {}
+
+    // 快照当前路由文件，用于后续检测新增路由
+    const routerFilePath = pathResolve(__dirname, '../../../app/frontend/src/router/index.js');
+    let beforeRoutes = [];
+    try {
+      if (existsSync(routerFilePath)) {
+        beforeRoutes = parseRoutePaths(readFileSync(routerFilePath, 'utf8'));
+      }
+    } catch {}
+
+    const result = await callClaudeCode(msgContent || '请查看我上传的文件', conversationId, history, attachments, targetApps, targetSkills);
+
+    // 抢救被误放到 app/temp/ 根目录的文件
+    await rescueMisplacedFiles(tempRootDir, tempDir, existingTempRootFiles, conversationId);
+
+    // 调试：检查 Claude 运行后 temp 目录的变化
+    try {
+      if (existsSync(tempDir)) {
+        const afterFiles = readdirSync(tempDir);
+        const newFiles = afterFiles.filter(f => !existingTempFiles.has(f));
+        console.log(`[FileDebug] temp 目录 ${tempDir}: 之前 ${existingTempFiles.size} 个文件, 之后 ${afterFiles.length} 个文件, 新增 ${newFiles.length} 个: ${newFiles.join(', ')}`);
+      } else {
+        console.log(`[FileDebug] 目录不存在: ${tempDir}`);
+      }
+    } catch (e) {
+      console.log(`[FileDebug] 扫描失败: ${e.message}`);
+    }
+
+    // ===== 检测路由变化（用于 Gemini 二次处理） =====
+    let newRoutes = [];
+    try {
+      const afterRoutes = parseRoutePaths(readFileSync(routerFilePath, 'utf8'));
+      const beforePaths = new Set(beforeRoutes.map(r => r.path));
+      newRoutes = afterRoutes.filter(r => !beforePaths.has(r.path));
+      if (newRoutes.length > 0) {
+        console.log(`[RouteDetect] 检测到新路由: ${newRoutes.map(r => r.path).join(', ')}`);
+      }
+    } catch {}
+
+    // ===== 扫描新生成文件 =====
+    const scannedFiles = scanNewFiles(tempDir, existingTempFiles, conversationId);
+
+    // ===== 第二轮：Gemini 结构化提取 =====
+    let structuredOutput = null;
+    if (isOpenRouterConfigured()) {
+      broadcast({ type: 'processing', conversationId, requestId, message: '正在提取结构化信息...' });
+      structuredOutput = await extractStructuredOutput({
+        requirement: msgContent || '请查看我上传的文件',
+        claudeOutput: result.stdout,
+        newRoutes,
+        newFiles: scannedFiles,
+        hasCodeChanges: newRoutes.length > 0 || scannedFiles.length > 0
+      });
+    }
+
+    // 优先使用 Gemini 的结构化输出，否则回退到 Claude Code 自身的输出
+    const parseSource = structuredOutput || result.stdout;
+
+    // 1. 提取 Skill 信息
+    const skillInfos = await extractAndSaveSkill(parseSource);
+
+    // 2. 检查是否为简单回复 [RESPONSE]
+    const responseText = extractResponse(parseSource);
+    if (responseText) {
+      let responseFiles = extractFileInfo(parseSource);
+      responseFiles = mergeFileAttachments(responseFiles, scannedFiles);
+      const responseAttachments = [...responseFiles];
+      if (skillInfos) skillInfos.forEach(s => responseAttachments.push({ type: 'skill_created', name: s.name, description: s.description }));
+      const insertData = { conversation_id: conversationId, role: 'assistant', content: responseText, raw_output: result.stdout };
+      if (responseAttachments.length > 0) insertData.attachments = responseAttachments;
+
+      await supabase.from('messages').insert(insertData);
+
+      clearProcessing(conversationId);
+      clearConversationProcessing(conversationId);
+      broadcast({ type: 'completed', conversationId, requestId, message: '完成', skill: skillInfos });
+      return;
+    }
+
+    // 3. 提取页面信息（支持多个，优先从 Gemini 结构化输出，其次路由 diff 自动检测）
+    let pageInfos = extractPageInfo(parseSource, content?.trim() || '');
+
+    if (!pageInfos && newRoutes.length > 0) {
+      pageInfos = newRoutes.map(r => ({
+        title: r.name.replace(/([A-Z])/g, ' $1').trim(),
+        description: content?.trim().slice(0, 200) || '',
+        routePath: r.path,
+        isPublic: false
+      }));
+      console.log(`[PageDetect] 路由 diff 兜底: ${newRoutes.map(r => r.path).join(', ')}`);
+    }
+
+    if (pageInfos) {
+      for (const pageInfo of pageInfos) {
+        const { data: existingPage } = await supabase
+          .from('interactive_pages')
+          .select('id')
+          .eq('route_path', pageInfo.routePath)
+          .maybeSingle();
+
+        if (existingPage) {
+          const updateData = { updated_at: new Date().toISOString() };
+          if (pageInfo.isPublic !== undefined) updateData.is_public = pageInfo.isPublic;
+          if (pageInfo.title) updateData.title = pageInfo.title;
+          await supabase
+            .from('interactive_pages')
+            .update(updateData)
+            .eq('id', existingPage.id);
+        } else {
+          await supabase
+            .from('interactive_pages')
+            .insert({
+              conversation_id: conversationId,
+              title: pageInfo.title,
+              description: pageInfo.description,
+              route_path: pageInfo.routePath,
+              status: 'active',
+              is_public: pageInfo.isPublic || false
+            });
+        }
+      }
+    }
+
+    // 3.5 页面变更后重启应用并验证
+    if (pageInfos) {
+      broadcast({ type: 'processing', conversationId, requestId, message: '正在重启应用并验证...' });
+      await verifyAppAfterChange(conversationId, requestId, { broadcast, restartAppProject, getAppStatus, getAppLogs, verifyAndFixApp });
+    }
+
+    // 3.6 Git 自动提交代码变更
+    if (pageInfos || skillInfos) {
+      try {
+        const gitResult = await commitChanges(`feat: ${(content || msgContent || '').trim().slice(0, 150)}`);
+        if (gitResult.committed) console.log(`[Git] ${gitResult.commitHash}`);
+      } catch (e) { console.error('[Git]', e.message); }
+    }
+
+    // 4. 保存助手回复（使用 Claude Code 的自然语言描述作为正文）
+    const naturalText = extractNaturalText(result.stdout);
+    let fileAttachments = extractFileInfo(parseSource);
+    fileAttachments = mergeFileAttachments(fileAttachments, scannedFiles);
+    const reply = naturalText || '需求处理完成';
+
+    const allAttachments = [...fileAttachments];
+    if (pageInfos) pageInfos.forEach(p => allAttachments.push({ type: 'page_created', name: p.title, route: p.routePath }));
+    if (skillInfos) skillInfos.forEach(s => allAttachments.push({ type: 'skill_created', name: s.name, description: s.description }));
+
+    const assistantInsert = { conversation_id: conversationId, role: 'assistant', content: reply, raw_output: result.stdout };
+    if (allAttachments.length > 0) assistantInsert.attachments = allAttachments;
+
+    await supabase.from('messages').insert(assistantInsert);
+
+    clearProcessing(conversationId);
+    clearConversationProcessing(conversationId);
+    broadcast({ type: 'completed', conversationId, requestId, message: '完成', pages: pageInfos, skill: skillInfos });
+  } catch (error) {
+    console.error('[Server] Claude Code 失败:', error);
+
+    const supabase = getSupabase();
+    await supabase
+      .from('messages')
+      .insert({ conversation_id: conversationId, role: 'system', content: `失败: ${error.message}` });
+
+    clearProcessing(conversationId);
+    clearConversationProcessing(conversationId);
+    broadcast({ type: 'error', conversationId, requestId, message: error.message });
+  }
+}
+
+// 处理完一条消息后，检查对话队列中的下一条消息
+function processNextInConversationQueue(conversationId) {
+  // 检查是否已被用户中断
+  if (abortedConversations.has(conversationId)) {
+    abortedConversations.delete(conversationId);
+    clearQueued(conversationId);
+    // 清空该对话的所有排队消息
+    while (shiftConversationQueue(conversationId)) {}
+    return;
+  }
+
+  const next = shiftConversationQueue(conversationId);
+  if (!next) return;
+
+  // 广播该消息离开队列
+  broadcast({ type: 'message_dequeued', conversationId, messageId: next.messageId });
+
+  requestQueue.add(async () => {
+    if (abortedConversations.has(conversationId)) {
+      abortedConversations.delete(conversationId);
+      clearQueued(conversationId);
+      while (shiftConversationQueue(conversationId)) {}
+      return;
+    }
+
+    await processMessage(next.payload);
+    processNextInConversationQueue(conversationId);
+  });
+}
+
 // 发送消息（核心：触发 Claude Code 修改应用项目）
 router.post('/api/conversations/:id/messages', async (req, res) => {
   const { content, attachments, targetApps, targetSkills } = req.body;
@@ -144,7 +390,31 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
     const requestId = Date.now().toString();
     res.json({ success: true, data: userMsg, requestId });
 
-    // 广播排队状态（队列中有任务时标记为排队，否则直接进入处理）
+    const messagePayload = {
+      conversationId,
+      messageId: userMsg.id,
+      requestId,
+      msgContent,
+      attachments,
+      targetApps,
+      targetSkills,
+      hasAttachments,
+      content
+    };
+
+    // 判断该对话是否正在忙碌（已有消息在处理或排队）
+    if (isConversationBusy(conversationId)) {
+      // 加入对话级排队
+      const queuePos = addToConversationQueue(conversationId, {
+        messageId: userMsg.id,
+        requestId,
+        payload: messagePayload
+      });
+      broadcast({ type: 'message_queued', conversationId, messageId: userMsg.id, queuePosition: queuePos });
+      return;
+    }
+
+    // 广播排队状态（全局队列中有任务时标记为排队，否则直接进入处理）
     if (requestQueue.size > 0 || requestQueue.pending > 0) {
       markQueued(conversationId);
       broadcast({ type: 'queued', conversationId, requestId });
@@ -159,212 +429,9 @@ router.post('/api/conversations/:id/messages', async (req, res) => {
         return;
       }
 
-      try {
-        markProcessing(conversationId);
-        broadcast({ type: 'processing', conversationId, requestId, message: '正在处理需求...' });
-
-        // 获取对话历史（排除刚插入的这条，取最近 20 条作为上下文）
-        let history = [];
-        try {
-          const { data: historyData } = await supabase
-            .from('messages')
-            .select('role, content')
-            .eq('conversation_id', conversationId)
-            .neq('id', userMsg.id)
-            .order('created_at', { ascending: true });
-          if (historyData) {
-            history = historyData.filter(m => m.role !== 'system').slice(-20);
-          }
-        } catch {}
-
-        // 首条消息时自动生成对话标题
-        if (history.length === 0) {
-          const titleSource = msgContent || (hasAttachments ? `上传了 ${attachments.length} 个文件` : '新对话');
-          const autoTitle = titleSource.slice(0, 30) + (titleSource.length > 30 ? '...' : '');
-          try {
-            await supabase
-              .from('conversations')
-              .update({ title: autoTitle, updated_at: new Date().toISOString() })
-              .eq('id', conversationId);
-            broadcast({ type: 'title_updated', conversationId, title: autoTitle });
-          } catch {}
-        }
-
-        // 记录 Claude 执行前 temp 目录中已有的文件（递归，用于后续检测新生成的文件）
-        const tempDir = pathResolve(__dirname, '../../../app/temp', conversationId);
-        const tempRootDir = pathResolve(__dirname, '../../../app/temp');
-        let existingTempFiles = new Map();
-        let existingTempRootFiles = new Set();
-        try {
-          if (existsSync(tempDir)) existingTempFiles = collectAllFiles(tempDir);
-        } catch {}
-        // 记录 temp 根目录已有文件，用于检测被误放到根目录的文件
-        try {
-          if (existsSync(tempRootDir)) existingTempRootFiles = new Set(readdirSync(tempRootDir));
-        } catch {}
-
-        // 快照当前路由文件，用于后续检测新增路由
-        const routerFilePath = pathResolve(__dirname, '../../../app/frontend/src/router/index.js');
-        let beforeRoutes = [];
-        try {
-          if (existsSync(routerFilePath)) {
-            beforeRoutes = parseRoutePaths(readFileSync(routerFilePath, 'utf8'));
-          }
-        } catch {}
-
-        const result = await callClaudeCode(msgContent || '请查看我上传的文件', conversationId, history, attachments, targetApps, targetSkills);
-
-        // 抢救被误放到 app/temp/ 根目录的文件
-        await rescueMisplacedFiles(tempRootDir, tempDir, existingTempRootFiles, conversationId);
-
-        // 调试：检查 Claude 运行后 temp 目录的变化
-        try {
-          if (existsSync(tempDir)) {
-            const afterFiles = readdirSync(tempDir);
-            const newFiles = afterFiles.filter(f => !existingTempFiles.has(f));
-            console.log(`[FileDebug] temp 目录 ${tempDir}: 之前 ${existingTempFiles.size} 个文件, 之后 ${afterFiles.length} 个文件, 新增 ${newFiles.length} 个: ${newFiles.join(', ')}`);
-          } else {
-            console.log(`[FileDebug] 目录不存在: ${tempDir}`);
-          }
-        } catch (e) {
-          console.log(`[FileDebug] 扫描失败: ${e.message}`);
-        }
-
-        // ===== 检测路由变化（用于 Gemini 二次处理） =====
-        let newRoutes = [];
-        try {
-          const afterRoutes = parseRoutePaths(readFileSync(routerFilePath, 'utf8'));
-          const beforePaths = new Set(beforeRoutes.map(r => r.path));
-          newRoutes = afterRoutes.filter(r => !beforePaths.has(r.path));
-          if (newRoutes.length > 0) {
-            console.log(`[RouteDetect] 检测到新路由: ${newRoutes.map(r => r.path).join(', ')}`);
-          }
-        } catch {}
-
-        // ===== 扫描新生成文件 =====
-        const scannedFiles = scanNewFiles(tempDir, existingTempFiles, conversationId);
-
-        // ===== 第二轮：Gemini 结构化提取 =====
-        let structuredOutput = null;
-        if (isOpenRouterConfigured()) {
-          broadcast({ type: 'processing', conversationId, requestId, message: '正在提取结构化信息...' });
-          structuredOutput = await extractStructuredOutput({
-            requirement: msgContent || '请查看我上传的文件',
-            claudeOutput: result.stdout,
-            newRoutes,
-            newFiles: scannedFiles,
-            hasCodeChanges: newRoutes.length > 0 || scannedFiles.length > 0
-          });
-        }
-
-        // 优先使用 Gemini 的结构化输出，否则回退到 Claude Code 自身的输出
-        const parseSource = structuredOutput || result.stdout;
-
-        // 1. 提取 Skill 信息
-        const skillInfos = await extractAndSaveSkill(parseSource);
-
-        // 2. 检查是否为简单回复 [RESPONSE]
-        const responseText = extractResponse(parseSource);
-        if (responseText) {
-          let responseFiles = extractFileInfo(parseSource);
-          responseFiles = mergeFileAttachments(responseFiles, scannedFiles);
-          const responseAttachments = [...responseFiles];
-          if (skillInfos) skillInfos.forEach(s => responseAttachments.push({ type: 'skill_created', name: s.name, description: s.description }));
-          const insertData = { conversation_id: conversationId, role: 'assistant', content: responseText, raw_output: result.stdout };
-          if (responseAttachments.length > 0) insertData.attachments = responseAttachments;
-
-          await supabase.from('messages').insert(insertData);
-
-          clearProcessing(conversationId);
-          broadcast({ type: 'completed', conversationId, requestId, message: '完成', skill: skillInfos });
-          return;
-        }
-
-        // 3. 提取页面信息（支持多个，优先从 Gemini 结构化输出，其次路由 diff 自动检测）
-        let pageInfos = extractPageInfo(parseSource, content?.trim() || '');
-
-        if (!pageInfos && newRoutes.length > 0) {
-          pageInfos = newRoutes.map(r => ({
-            title: r.name.replace(/([A-Z])/g, ' $1').trim(),
-            description: content?.trim().slice(0, 200) || '',
-            routePath: r.path,
-            isPublic: false
-          }));
-          console.log(`[PageDetect] 路由 diff 兜底: ${newRoutes.map(r => r.path).join(', ')}`);
-        }
-
-        if (pageInfos) {
-          for (const pageInfo of pageInfos) {
-            const { data: existingPage } = await supabase
-              .from('interactive_pages')
-              .select('id')
-              .eq('route_path', pageInfo.routePath)
-              .maybeSingle();
-
-            if (existingPage) {
-              const updateData = { updated_at: new Date().toISOString() };
-              if (pageInfo.isPublic !== undefined) updateData.is_public = pageInfo.isPublic;
-              if (pageInfo.title) updateData.title = pageInfo.title;
-              await supabase
-                .from('interactive_pages')
-                .update(updateData)
-                .eq('id', existingPage.id);
-            } else {
-              await supabase
-                .from('interactive_pages')
-                .insert({
-                  conversation_id: conversationId,
-                  title: pageInfo.title,
-                  description: pageInfo.description,
-                  route_path: pageInfo.routePath,
-                  status: 'active',
-                  is_public: pageInfo.isPublic || false
-                });
-            }
-          }
-        }
-
-        // 3.5 页面变更后重启应用并验证
-        if (pageInfos) {
-          broadcast({ type: 'processing', conversationId, requestId, message: '正在重启应用并验证...' });
-          await verifyAppAfterChange(conversationId, requestId, { broadcast, restartAppProject, getAppStatus, getAppLogs, verifyAndFixApp });
-        }
-
-        // 3.6 Git 自动提交代码变更
-        if (pageInfos || skillInfos) {
-          try {
-            const gitResult = await commitChanges(`feat: ${content.trim().slice(0, 150)}`);
-            if (gitResult.committed) console.log(`[Git] ${gitResult.commitHash}`);
-          } catch (e) { console.error('[Git]', e.message); }
-        }
-
-        // 4. 保存助手回复（使用 Claude Code 的自然语言描述作为正文）
-        const naturalText = extractNaturalText(result.stdout);
-        let fileAttachments = extractFileInfo(parseSource);
-        fileAttachments = mergeFileAttachments(fileAttachments, scannedFiles);
-        const reply = naturalText || '需求处理完成';
-
-        const allAttachments = [...fileAttachments];
-        if (pageInfos) pageInfos.forEach(p => allAttachments.push({ type: 'page_created', name: p.title, route: p.routePath }));
-        if (skillInfos) skillInfos.forEach(s => allAttachments.push({ type: 'skill_created', name: s.name, description: s.description }));
-
-        const assistantInsert = { conversation_id: conversationId, role: 'assistant', content: reply, raw_output: result.stdout };
-        if (allAttachments.length > 0) assistantInsert.attachments = allAttachments;
-
-        await supabase.from('messages').insert(assistantInsert);
-
-        clearProcessing(conversationId);
-        broadcast({ type: 'completed', conversationId, requestId, message: '完成', pages: pageInfos, skill: skillInfos });
-      } catch (error) {
-        console.error('[Server] Claude Code 失败:', error);
-
-        await supabase
-          .from('messages')
-          .insert({ conversation_id: conversationId, role: 'system', content: `失败: ${error.message}` });
-
-        clearProcessing(conversationId);
-        broadcast({ type: 'error', conversationId, requestId, message: error.message });
-      }
+      await processMessage(messagePayload);
+      // 处理完后检查该对话是否有排队的下一条消息
+      processNextInConversationQueue(conversationId);
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -493,6 +560,36 @@ router.get('/api/queue/status', (req, res) => {
   });
 });
 
+// 获取对话的消息队列
+router.get('/api/conversations/:id/queue', (req, res) => {
+  const queue = getConversationQueue(req.params.id);
+  res.json({
+    success: true,
+    data: queue.map(item => ({ messageId: item.messageId, requestId: item.requestId }))
+  });
+});
+
+// 从对话队列中删除排队的消息
+router.delete('/api/conversations/:id/queue/:messageId', async (req, res) => {
+  const { id: conversationId, messageId } = req.params;
+
+  const removed = removeFromConversationQueue(conversationId, messageId);
+  if (!removed) {
+    return res.status(404).json({ success: false, error: '消息不在队列中' });
+  }
+
+  // 删除数据库中的用户消息
+  try {
+    const supabase = getSupabase();
+    await supabase.from('messages').delete().eq('id', messageId);
+  } catch {}
+
+  // 广播消息出队事件
+  broadcast({ type: 'message_dequeued', conversationId, messageId });
+
+  res.json({ success: true });
+});
+
 // 中断对话任务
 router.post('/api/conversations/:id/cancel', async (req, res) => {
   const conversationId = req.params.id;
@@ -506,8 +603,21 @@ router.post('/api/conversations/:id/cancel', async (req, res) => {
   // 3. 清理状态
   clearProcessing(conversationId);
   clearQueued(conversationId);
+  clearConversationProcessing(conversationId);
 
-  // 4. 写入中断消息
+  // 4. 清空该对话的消息队列，并删除排队的用户消息
+  const pendingMessages = getConversationQueue(conversationId);
+  if (pendingMessages.length > 0) {
+    try {
+      const supabase = getSupabase();
+      for (const item of pendingMessages) {
+        await supabase.from('messages').delete().eq('id', item.messageId);
+      }
+    } catch {}
+    while (shiftConversationQueue(conversationId)) {}
+  }
+
+  // 5. 写入中断消息
   try {
     const supabase = getSupabase();
     await supabase
@@ -515,7 +625,7 @@ router.post('/api/conversations/:id/cancel', async (req, res) => {
       .insert({ conversation_id: conversationId, role: 'system', content: '任务已被用户中断' });
   } catch {}
 
-  // 5. 广播中断事件
+  // 6. 广播中断事件
   broadcast({ type: 'cancelled', conversationId });
 
   res.json({ success: true, wasRunning });

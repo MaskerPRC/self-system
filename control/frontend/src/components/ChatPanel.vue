@@ -42,7 +42,8 @@
 
         <!-- User message -->
         <div v-else-if="m.role === 'user'" class="flex justify-end animate-fade-in-up">
-          <div class="max-w-[85%] sm:max-w-[70%] bg-surface border border-stone-200 text-ink-900 px-6 py-4 rounded-3xl rounded-tr-md shadow-sm">
+          <div class="max-w-[85%] sm:max-w-[70%] bg-surface border text-ink-900 px-6 py-4 rounded-3xl rounded-tr-md shadow-sm"
+            :class="queuedMessageIds.includes(m.id) ? 'border-amber-300 bg-amber-50/30' : 'border-stone-200'">
             <!-- Canvas context cards -->
             <div v-if="getCanvasContext(m.attachments).length" class="flex flex-wrap gap-1.5 mb-2">
               <template v-for="(ctx, i) in getCanvasContext(m.attachments)" :key="'ctx-' + i">
@@ -97,6 +98,19 @@
             <!-- Text content -->
             <div v-if="m.content" class="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
               {{ m.content }}
+            </div>
+            <!-- 排队中标签 + 删除按钮 -->
+            <div v-if="queuedMessageIds.includes(m.id)" class="flex items-center justify-between mt-2 pt-2 border-t border-amber-200">
+              <span class="inline-flex items-center gap-1.5 text-xs text-amber-600 font-medium">
+                <i class="ph ph-clock text-sm"></i>
+                排队中
+              </span>
+              <button @click="emit('remove-queued', m.id)"
+                class="inline-flex items-center gap-1 text-xs text-ink-400 hover:text-red-500 hover:bg-red-50 px-2 py-1 rounded-full transition-colors"
+                title="移除排队">
+                <i class="ph ph-x text-sm"></i>
+                移除
+              </button>
             </div>
           </div>
         </div>
@@ -288,13 +302,13 @@
           </div>
 
           <!-- Attach button -->
-          <button @click="fileInputRef?.click()" :disabled="isProcessing"
-            class="absolute left-2 bottom-2 w-10 h-10 flex items-center justify-center text-ink-400 hover:text-brand-500 rounded-full hover:bg-stone-100 disabled:opacity-50 transition-colors">
+          <button @click="fileInputRef?.click()"
+            class="absolute left-2 bottom-2 w-10 h-10 flex items-center justify-center text-ink-400 hover:text-brand-500 rounded-full hover:bg-stone-100 transition-colors">
             <i class="ph ph-paperclip text-lg"></i>
           </button>
 
           <!-- Send button -->
-          <button @click="send" :disabled="(!text.trim() && !pendingFiles.length) || isProcessing"
+          <button @click="send" :disabled="!text.trim() && !pendingFiles.length"
             class="absolute right-2 bottom-2 w-10 h-10 flex items-center justify-center bg-brand-500 text-white rounded-full hover:bg-brand-600 disabled:bg-stone-100 disabled:text-stone-400 transition-colors">
             <i class="ph-bold ph-arrow-up text-lg"></i>
           </button>
@@ -412,9 +426,10 @@ const props = defineProps({
   todoContent: { type: String, default: null },
   watchMsgIds: { type: Array, default: () => [] },
   pages: { type: Array, default: () => [] },
-  skills: { type: Array, default: () => [] }
+  skills: { type: Array, default: () => [] },
+  queuedMessageIds: { type: Array, default: () => [] }
 })
-const emit = defineEmits(['send', 'toggle-sidebar', 'cancel', 'toggle-watch-msg'])
+const emit = defineEmits(['send', 'toggle-sidebar', 'cancel', 'toggle-watch-msg', 'remove-queued'])
 
 const text = ref('')
 const msgsRef = ref(null)
@@ -509,7 +524,6 @@ const todoItems = computed(() => {
 })
 
 function send() {
-  if (props.isProcessing) return
   if (!text.value.trim() && !pendingFiles.value.length) return
   emit('send', {
     content: text.value,

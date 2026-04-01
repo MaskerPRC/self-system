@@ -30,10 +30,12 @@
       :watchMsgIds="watchMsgIds"
       :pages="pages"
       :skills="skills"
+      :queuedMessageIds="currentQueuedMessageIds"
       @send="handleSend"
       @cancel="cancelTask"
       @toggle-sidebar="showSidebar = !showSidebar"
       @toggle-watch-msg="toggleWatchMsg"
+      @remove-queued="removeQueuedMessage"
     />
 
     <!-- 并行任务确认弹窗 -->
@@ -82,6 +84,8 @@ const queuedList = ref([])
 const unreadSet = ref(new Set())
 const todoContent = ref(null)
 let todoTimer = null
+// 对话级消息排队: Map<conversationId, Set<messageId>>
+const conversationQueuedMsgs = ref(new Map())
 
 // App pages 列表（用于 @mention）
 const pages = ref([])
@@ -146,6 +150,31 @@ const filteredConversations = computed(() => {
     watchSet.value.has(c.id) || watchMsgConvIds.value.has(c.id)
   )
 })
+
+// 当前对话的排队消息 ID 列表
+const currentQueuedMessageIds = computed(() => {
+  if (!activeId.value) return []
+  const set = conversationQueuedMsgs.value.get(activeId.value)
+  return set ? [...set] : []
+})
+
+async function removeQueuedMessage(messageId) {
+  if (!activeId.value) return
+  try {
+    await fetch(`${API}/api/conversations/${activeId.value}/queue/${messageId}`, { method: 'DELETE' })
+    // 本地乐观更新
+    const set = conversationQueuedMsgs.value.get(activeId.value)
+    if (set) {
+      set.delete(messageId)
+      if (set.size === 0) conversationQueuedMsgs.value.delete(activeId.value)
+      conversationQueuedMsgs.value = new Map(conversationQueuedMsgs.value)
+    }
+    // 从消息列表中移除
+    messages.value = messages.value.filter(m => m.id !== messageId)
+  } catch (e) {
+    console.error('Remove queued message failed:', e)
+  }
+}
 
 // 并行确认弹窗
 const parallelConfirm = ref(false)
@@ -320,8 +349,36 @@ function connectWs() {
     if (data.type === 'connected') {
       processingList.value = data.processing || []
       queuedList.value = data.queued || []
+      // 初始化对话级消息队列
+      const cq = data.conversationQueues || {}
+      const newMap = new Map()
+      for (const [convId, msgIds] of Object.entries(cq)) {
+        newMap.set(convId, new Set(msgIds))
+      }
+      conversationQueuedMsgs.value = newMap
       if (activeId.value) {
         isProcessing.value = processingList.value.includes(activeId.value)
+      }
+      return
+    }
+
+    if (data.type === 'message_queued') {
+      const { conversationId, messageId } = data
+      if (!conversationQueuedMsgs.value.has(conversationId)) {
+        conversationQueuedMsgs.value.set(conversationId, new Set())
+      }
+      conversationQueuedMsgs.value.get(conversationId).add(messageId)
+      conversationQueuedMsgs.value = new Map(conversationQueuedMsgs.value)
+      return
+    }
+
+    if (data.type === 'message_dequeued') {
+      const { conversationId, messageId } = data
+      const set = conversationQueuedMsgs.value.get(conversationId)
+      if (set) {
+        set.delete(messageId)
+        if (set.size === 0) conversationQueuedMsgs.value.delete(conversationId)
+        conversationQueuedMsgs.value = new Map(conversationQueuedMsgs.value)
       }
       return
     }
@@ -375,6 +432,9 @@ function connectWs() {
       if (data.conversationId) {
         processingList.value = processingList.value.filter(id => id !== data.conversationId)
         queuedList.value = queuedList.value.filter(id => id !== data.conversationId)
+        // 清除该对话的消息排队
+        conversationQueuedMsgs.value.delete(data.conversationId)
+        conversationQueuedMsgs.value = new Map(conversationQueuedMsgs.value)
       }
       if (data.conversationId === activeId.value) {
         isProcessing.value = false

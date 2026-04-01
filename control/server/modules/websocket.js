@@ -1,5 +1,6 @@
 import { WebSocketServer } from 'ws';
 import { isAuthEnabled, validateSession, parseCookie } from './auth.js';
+import { getAllConversationQueues } from './queue.js';
 
 let wss = null;
 const clients = new Set();
@@ -33,7 +34,8 @@ export function setupWebSocket(server) {
       type: 'connected',
       message: '已连接到控制平台',
       processing: [...processingConversations],
-      queued: [...queuedConversations]
+      queued: [...queuedConversations],
+      conversationQueues: getAllConversationQueues()
     }));
 
     ws.on('close', () => {
