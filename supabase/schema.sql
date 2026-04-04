@@ -12,6 +12,8 @@ CREATE TABLE messages (
   conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
   role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
   content TEXT NOT NULL,
+  attachments JSONB,
+  raw_output TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
