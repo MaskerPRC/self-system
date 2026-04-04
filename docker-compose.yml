@@ -27,9 +27,6 @@ services:
       - CLAUDE_CODE_URL=${CLAUDE_CODE_URL}
       - CLAUDE_CODE_KEY=${CLAUDE_CODE_KEY}
       - CLAUDE_MODEL=${CLAUDE_MODEL}
-      # Supabase 配置
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       # 应用容器名称（供 process.js 使用）
       - APP_CONTAINER_NAME=digital-avatar-app-dev
       - APP_PROD_CONTAINER_NAME=digital-avatar-app-prod

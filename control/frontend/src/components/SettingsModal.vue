@@ -124,13 +124,13 @@
           <div>
             <div class="mb-4">
               <div class="flex items-center gap-2">
-                <h3 class="font-medium text-ink-900">OpenRouter 配置</h3>
+                <h3 class="font-medium text-ink-900">二次结构化配置</h3>
                 <span v-if="openrouterStatus" class="text-[11px] px-2 py-0.5 rounded-full font-medium"
                   :class="openrouterStatus === 'db' ? 'bg-emerald-50 text-emerald-600' : 'bg-sky-50 text-sky-600'">
                   {{ openrouterStatus === 'db' ? '已配置' : '来自环境变量' }}
                 </span>
               </div>
-              <p class="text-xs text-ink-500 mt-0.5">用于二次结构化处理（Gemini Flash），自动提取页面/Skill 标记，解决格式丢失问题</p>
+              <p class="text-xs text-ink-500 mt-0.5">用于二次结构化处理，自动提取页面/Skill 标记，解决格式丢失问题</p>
             </div>
 
             <div class="space-y-3">
@@ -157,7 +157,15 @@
                 <input v-model="openrouterConfig.model"
                   placeholder="google/gemini-2.5-flash"
                   class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
-                <p class="text-[11px] text-ink-400 mt-1">默认：google/gemini-2.5-flash，也可使用其他 OpenRouter 支持的模型</p>
+                <p class="text-[11px] text-ink-400 mt-1">默认：google/gemini-2.5-flash</p>
+              </div>
+
+              <div>
+                <label class="text-xs font-medium text-ink-700 mb-1 block">Base URL</label>
+                <input v-model="openrouterConfig.baseUrl"
+                  placeholder="https://openrouter.ai/api/v1"
+                  class="w-full px-3 py-2 text-sm bg-paper border border-stone-200 rounded-lg outline-none focus:border-brand-300 transition-colors font-mono" />
+                <p class="text-[11px] text-ink-400 mt-1">默认：https://openrouter.ai/api/v1，可替换为其他兼容 OpenAI 格式的 API 地址</p>
               </div>
 
               <div class="flex items-center gap-2">
@@ -464,7 +472,7 @@ const claudeConfigKeyChanged = computed(() => claudeConfig.value.apiKey && claud
 const claudeConfigProxyKeyChanged = computed(() => claudeConfig.value.proxyKey && claudeConfig.value.proxyKey !== claudeConfigOriginalProxyKey.value)
 
 // OpenRouter 配置
-const openrouterConfig = ref({ apiKey: '', model: 'google/gemini-2.5-flash' })
+const openrouterConfig = ref({ apiKey: '', model: 'google/gemini-2.5-flash', baseUrl: '' })
 const openrouterSaving = ref(false)
 const openrouterMessage = ref('')
 const openrouterError = ref(false)
@@ -654,11 +662,12 @@ async function fetchOpenrouterConfig() {
     if (d.success && d.data) {
       openrouterConfig.value.apiKey = d.data.apiKey || ''
       openrouterConfig.value.model = d.data.model || 'google/gemini-2.5-flash'
+      openrouterConfig.value.baseUrl = d.data.baseUrl || ''
       openrouterHasKey.value = d.data.hasApiKey || false
       openrouterStatus.value = d.data.source || ''
       openrouterOriginalKey.value = d.data.apiKey || ''
     } else {
-      openrouterConfig.value = { apiKey: '', model: 'google/gemini-2.5-flash' }
+      openrouterConfig.value = { apiKey: '', model: 'google/gemini-2.5-flash', baseUrl: '' }
       openrouterHasKey.value = false
       openrouterStatus.value = ''
     }
@@ -670,7 +679,10 @@ async function saveOpenrouterConfig() {
   openrouterMessage.value = ''
   openrouterError.value = false
   try {
-    const body = { model: openrouterConfig.value.model || 'google/gemini-2.5-flash' }
+    const body = {
+      model: openrouterConfig.value.model || 'google/gemini-2.5-flash',
+      baseUrl: openrouterConfig.value.baseUrl || ''
+    }
     if (openrouterKeyChanged.value) body.apiKey = openrouterConfig.value.apiKey
     const r = await fetch(`${API}/api/settings/openrouter-config`, {
       method: 'POST',
@@ -695,10 +707,10 @@ async function saveOpenrouterConfig() {
 }
 
 async function clearOpenrouterConfig() {
-  if (!confirm('确定清除 OpenRouter 配置？清除后将回退到环境变量 OPENROUTER_API_KEY。')) return
+  if (!confirm('确定清除二次结构化配置？清除后将回退到环境变量。')) return
   try {
     await fetch(`${API}/api/settings/openrouter-config`, { method: 'DELETE' })
-    openrouterConfig.value = { apiKey: '', model: 'google/gemini-2.5-flash' }
+    openrouterConfig.value = { apiKey: '', model: 'google/gemini-2.5-flash', baseUrl: '' }
     openrouterHasKey.value = false
     openrouterStatus.value = ''
     openrouterMessage.value = '配置已清除'

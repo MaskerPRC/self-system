@@ -67,7 +67,6 @@ RUN cd /app/control/server && pnpm install && \
 
 # ---- 复制控制项目源码 ----
 COPY control/ /app/control/
-COPY supabase/ /app/supabase/
 COPY .env* /app/
 
 # 构建控制前端
@@ -93,10 +92,6 @@ ENV CLAUDE_CODE_URL=
 ENV CLAUDE_CODE_KEY=
 # Claude Code 模型名称（可选，默认 opus）
 ENV CLAUDE_MODEL=
-
-# Supabase（通过 docker-compose 覆盖或用 .env）
-ENV SUPABASE_URL=
-ENV SUPABASE_ANON_KEY=
 
 # 应用容器名称
 ENV APP_CONTAINER_NAME=digital-avatar-app

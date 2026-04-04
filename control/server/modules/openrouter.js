@@ -27,7 +27,8 @@ function getOpenRouterConfig() {
   if (apiKey) {
     return {
       apiKey,
-      model: process.env.OPENROUTER_MODEL || DEFAULT_MODEL
+      model: process.env.OPENROUTER_MODEL || DEFAULT_MODEL,
+      baseUrl: process.env.OPENROUTER_BASE_URL || ''
     };
   }
 
@@ -37,10 +38,10 @@ function getOpenRouterConfig() {
 /**
  * 保存 OpenRouter 配置到 settings DB
  */
-export function saveOpenRouterConfig(apiKey, model = DEFAULT_MODEL) {
+export function saveOpenRouterConfig(apiKey, model = DEFAULT_MODEL, baseUrl = '') {
   sqliteDb.prepare(
     "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')"
-  ).run('openrouterConfig', JSON.stringify({ apiKey, model }));
+  ).run('openrouterConfig', JSON.stringify({ apiKey, model, baseUrl }));
   console.log('[OpenRouter] 配置已保存');
 }
 
@@ -67,8 +68,9 @@ async function callOpenRouter(messages, model) {
   if (!config) throw new Error('OpenRouter API key 未配置');
 
   const usedModel = model || config.model || DEFAULT_MODEL;
+  const baseUrl = config.baseUrl || OPENROUTER_BASE_URL;
 
-  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+  const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${config.apiKey}`,

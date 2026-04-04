@@ -5,7 +5,6 @@ import { writeFile as fsWriteFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { homedir } from 'os';
-import { supabase } from '../modules/supabase.js';
 import { sqliteDb } from '../modules/sqlite.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -60,17 +59,7 @@ async function readSettings() {
     });
   };
   try {
-    if (supabase) {
-      const { data, error } = await supabase.from('settings').select('key, value');
-      if (error) {
-        console.error('[Settings] Supabase 读取失败，降级到 SQLite:', error.message);
-        applyRows(sqliteDb.prepare('SELECT key, value FROM settings').all());
-      } else if (data) {
-        applyRows(data);
-      }
-    } else {
-      applyRows(sqliteDb.prepare('SELECT key, value FROM settings').all());
-    }
+    applyRows(sqliteDb.prepare('SELECT key, value FROM settings').all());
   } catch (e) {
     console.error('[Settings] 读取失败:', e.message);
   }
@@ -79,17 +68,9 @@ async function readSettings() {
 
 async function writeSetting(key, value) {
   const strValue = typeof value === 'string' ? value : JSON.stringify(value);
-  // 始终写入 SQLite（作为本地缓存，供同步读取使用）
   sqliteDb.prepare(
     'INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime(\'now\')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime(\'now\')'
   ).run(key, strValue);
-  // 如果配置了 Supabase，同时写入远程
-  if (supabase) {
-    const { error } = await supabase.from('settings').upsert({ key, value: strValue, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    if (error) {
-      console.error(`[Settings] Supabase 写入失败 (key=${key}):`, error.message);
-    }
-  }
 }
 
 // 启动时迁移
@@ -275,11 +256,7 @@ router.post('/api/settings/claude-config', async (req, res) => {
 
 router.delete('/api/settings/claude-config', async (req, res) => {
   try {
-    if (supabase) {
-      await supabase.from('settings').delete().eq('key', 'claudeConfig');
-    } else {
-      sqliteDb.prepare('DELETE FROM settings WHERE key = ?').run('claudeConfig');
-    }
+    sqliteDb.prepare('DELETE FROM settings WHERE key = ?').run('claudeConfig');
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -300,6 +277,7 @@ router.get('/api/settings/openrouter-config', async (req, res) => {
           apiKey: maskKey(dbConfig.apiKey),
           hasApiKey: true,
           model: dbConfig.model || 'google/gemini-2.5-flash',
+          baseUrl: dbConfig.baseUrl || '',
           source: 'db'
         }
       });
@@ -313,6 +291,7 @@ router.get('/api/settings/openrouter-config', async (req, res) => {
           apiKey: maskKey(envKey),
           hasApiKey: true,
           model: process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash',
+          baseUrl: process.env.OPENROUTER_BASE_URL || '',
           source: 'env'
         }
       });
@@ -325,13 +304,14 @@ router.get('/api/settings/openrouter-config', async (req, res) => {
 
 router.post('/api/settings/openrouter-config', async (req, res) => {
   try {
-    const { apiKey, model } = req.body;
+    const { apiKey, model, baseUrl } = req.body;
     const settings = await readSettings();
     const oldConfig = settings.openrouterConfig || {};
 
     const newConfig = {
       apiKey: (apiKey && !apiKey.startsWith('****')) ? apiKey : oldConfig.apiKey || '',
-      model: model || 'google/gemini-2.5-flash'
+      model: model || 'google/gemini-2.5-flash',
+      baseUrl: baseUrl || ''
     };
 
     await writeSetting('openrouterConfig', newConfig);
@@ -343,11 +323,7 @@ router.post('/api/settings/openrouter-config', async (req, res) => {
 
 router.delete('/api/settings/openrouter-config', async (req, res) => {
   try {
-    if (supabase) {
-      await supabase.from('settings').delete().eq('key', 'openrouterConfig');
-    } else {
-      sqliteDb.prepare('DELETE FROM settings WHERE key = ?').run('openrouterConfig');
-    }
+    sqliteDb.prepare('DELETE FROM settings WHERE key = ?').run('openrouterConfig');
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
